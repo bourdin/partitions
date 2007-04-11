@@ -17,34 +17,36 @@ typedef struct {
     int           k;      /* Number of domain to partition into */
     DA            da;     /* Information about the distributed layout */
     PetscScalar   step;   /* Initial step of the steepest descent methods */
+    EPS           eps;    /* Eigenvalue solver context */
+    Mat           K;      /* Matrix for the Laplacian */
 } AppCtx;
 
-extern PetscErrorCode ComputeK(AppCtx user, Mat K, Vec phi);
-extern PetscErrorCode ComputeLambda(AppCtx user, Mat K, Vec phi);
+extern PetscErrorCode ComputeK(AppCtx user, Vec phi);
+extern PetscErrorCode ComputeLambdaU(AppCtx user, Vec phi, PetscScalar *lambda, Vec u);
+extern PetscErrorCode ComputeG(AppCtx user, Vec G, Vec u);
 extern PetscErrorCode InitPhiQuarter(AppCtx user, Vec phi);
 extern PetscErrorCode InitPhiRandom(AppCtx user, Vec phi);
 
 int main (int argc, char ** argv) {
     PetscErrorCode   ierr;
     AppCtx           user;   
-    Mat              K;
-    Vec              u;
     Vec              tmp_phi, *phi;
-    
-    int              N, i;
+    Vec              *u, G, psi, vec_one;
+    PetscScalar      *lambda, F, Fold;
+    PetscScalar      stepmax = 5.0e+6;
+    PetscScalar      error, tol = 1.0e-3;
+        
+    int              N, i, it, maxit = 1000;
     PetscTruth       flag;
     
     PetscMPIInt      numprocs, myrank;
     
     /* Eigenvalue solver stuff */
-    EPS              eps;
     EPSType          type;
     ST               st;
     PetscScalar      st_shift = 0.0;
     STType           st_type  = STSINV; 
-    int              its, maxit, nconv, nev;
-    PetscScalar      tol, eigr, eigi;
-    Vec              ur, ui;
+    int              its;
     KSP              eps_ksp;
     PC               eps_pc;
     
@@ -59,6 +61,8 @@ int main (int argc, char ** argv) {
     if( flag==PETSC_FALSE ) user.ny=user.nx;
     N = user.nx*user.ny;
     PetscOptionsGetScalar(PETSC_NULL, "-mu", &user.mu, PETSC_NULL);
+    user.step = 10.0;
+    PetscOptionsGetScalar(PETSC_NULL, "-step", &user.step, PETSC_NULL);
     
     PetscOptionsGetInt(PETSC_NULL, "-k", &user.k, PETSC_NULL);
     if (user.k < 2) {
@@ -75,17 +79,25 @@ int main (int argc, char ** argv) {
     DACreate2d(PETSC_COMM_WORLD, DA_NONPERIODIC, DA_STENCIL_STAR, user.nx, user.ny,
                PETSC_DECIDE, PETSC_DECIDE, 1, 1, PETSC_NULL, PETSC_NULL, &user.da);
     
-    DAGetMatrix(user.da, MATMPIAIJ, &K);
+    DAGetMatrix(user.da, MATMPIAIJ, &user.K);
     DACreateGlobalVector(user.da, &tmp_phi);
     VecDuplicateVecs(tmp_phi, user.k, &phi);
+    VecDuplicateVecs(tmp_phi, user.k, &u);
+    VecDuplicate(tmp_phi, &G);
+    VecDuplicate(tmp_phi, &psi);
+    VecDuplicate(tmp_phi, &vec_one);
+    VecSet(vec_one, (PetscScalar) 1.0);
+    
     VecDestroy(tmp_phi);
+    PetscMalloc(user.k*sizeof(PetscScalar), &lambda);
 //    MatView(K, PETSC_VIEWER_DRAW_WORLD);
     
     /* Create the eigensolver context */
-    EPSCreate(PETSC_COMM_WORLD, &eps);
-    EPSSetOperators(eps, K, PETSC_NULL);
-    EPSSetProblemType(eps, EPS_HEP);
-    EPSGetST(eps, &st);
+    EPSCreate(PETSC_COMM_WORLD, &user.eps);
+
+    EPSSetOperators(user.eps, user.K, PETSC_NULL);
+    EPSSetProblemType(user.eps, EPS_HEP);
+    EPSGetST(user.eps, &st);
     
     STSetType(st, st_type);
     STSetShift(st, st_shift);
@@ -96,76 +108,101 @@ int main (int argc, char ** argv) {
     KSPSetType(eps_ksp, KSPCG);
 
     STSetFromOptions(st);
-    EPSSetFromOptions(eps);
+    EPSSetFromOptions(user.eps);
     
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    /* solve the eigenvalue problem */
-    for (i=0; i<user.k; i++){
-        PetscPrintf(PETSC_COMM_WORLD, "phi[%d]\n", i);
-        InitPhiRandom(user, phi[i]);
-        VecView(phi[i], PETSC_VIEWER_DRAW_WORLD);
-        ComputeK(user, K, phi[i]);
 
-        EPSSetOperators(eps, K, PETSC_NULL);
-        PetscGetTime(&eps_ts);
-        EPSSolve(eps);
-        PetscGetTime(&eps_tf);
-        
-        eps_t = eps_tf - eps_ts;
-        PetscPrintf(PETSC_COMM_WORLD, " Time spent on EPSSolve : %f sec\n", eps_t);
-        EPSGetIterationNumber(eps, &its);
-        PetscPrintf(PETSC_COMM_WORLD," Number of iterations of eigenvalue solver: %d\n",its);
-        
-        /* Display some information obout the EPS solver */
-        EPSGetType(eps,&type);
-        PetscPrintf(PETSC_COMM_WORLD," Solution method: %s\n\n",type);
-        EPSGetDimensions(eps,&nev,PETSC_NULL);
-        PetscPrintf(PETSC_COMM_WORLD," Number of requested eigenvalues: %d\n",nev);
-        EPSGetTolerances(eps,&tol,&maxit);
-        PetscPrintf(PETSC_COMM_WORLD," Stopping condition: tol=%.4g, maxit=%d\n",tol,maxit);
-        EPSGetConverged(eps,&nconv);
-        PetscPrintf(PETSC_COMM_WORLD," Number of converged eigenpairs: %d\n\n",nconv);
-        
-        /*
-            for (its=0; its<nconv; its++){
-            EPSGetValue(eps, its, &eigr, &eigi);
-            PetscPrintf(PETSC_COMM_WORLD, "[%d] eigenvalue: %9f + %9f i\n", its, eigr, eigi); 
+
+    /*    
+    for (i=0; i<user.k; i++){
+        InitPhiRandom(user, phi[i]);
+        VecScale(phi[i], (PetscScalar) .1);
+        VecView(phi[i], PETSC_VIEWER_DRAW_WORLD);
+        ComputeLambdaU(user, phi[i], &lambda[i], u[i]);
+        PetscPrintf(PETSC_COMM_WORLD, "[%d] lambda = %f\n", i, lambda[i]);
+        VecView(u[i], PETSC_VIEWER_DRAW_WORLD);
+    }
+    return 0;
+    */
+    
+    for (i=0; i<user.k; i++){
+        InitPhiRandom(user, phi[i]);
+        VecScale(phi[i], (PetscScalar) .1);
+    }
+    
+    F = 0.0;
+    Fold = 0.0;
+    it = 0;
+    PetscPrintf(PETSC_COMM_WORLD, "Iteration %d:\n", it);
+    for (i=0; i<user.k; i++){
+        ComputeLambdaU(user, phi[i], &lambda[i], u[i]);
+        PetscPrintf(PETSC_COMM_WORLD, "      lambda[%d] = %f\n", i, lambda[i]);
+        F += lambda[i];
+    }
+    PetscPrintf(PETSC_COMM_WORLD, "F = %f\n", F);
+    error = tol + 1.0;
+    
+    while ( error > tol ){ 
+        it++;
+        Fold = F;
+        F = 0.0;
+        PetscPrintf(PETSC_COMM_WORLD, "Iteration %d:\n", it);
+        VecSet(psi, (PetscScalar) 0.0);
+        for (i=0; i<user.k; i++){
+            ComputeG(user, G, u[i]);
+            VecAXPY(phi[i], user.step, G);
+            VecAXPY(psi, (PetscScalar) 1.0, phi[i]);
         }
-        */    
+        // truncation
+//        VecView(psi, PETSC_VIEWER_DRAW_WORLD);
+        VecPointwiseMax(psi, psi, vec_one);
+        for (i=0; i<user.k; i++){
+            VecPointwiseDivide(phi[i], phi[i], psi);
+        }
+        for (i=0; i<user.k; i++){
+            if ( (it%10) == i ){
+                VecView(phi[i], PETSC_VIEWER_DRAW_WORLD);
+            }
+        }
+        F = 0.0;
+        for (i=0; i<user.k; i++){
+            ComputeLambdaU(user, phi[i], &lambda[i], u[i]);
+            PetscPrintf(PETSC_COMM_WORLD, "      lambda[%d] = %f\n", i, lambda[i]);
+            F += lambda[i];
+        }
+//        PetscPrintf(PETSC_COMM_WORLD, "F = %f\n", F);
+    
+        if (F<=Fold) {
+            user.step = user.step * 2.0;
+            user.step = PetscMin(user.step, stepmax);
+        }
+        else {
+            user.step = user.step / 2.0;
+        }
+        error = (Fold - F) / F;
+//        error = PetscAbsReal(error); 
+        PetscPrintf(PETSC_COMM_WORLD, "F = %f, step = %f, error = %f\n\n", F, user.step, error);
+    }
+    
         
-        DACreateGlobalVector(user.da, &ur);
-        DACreateGlobalVector(user.da, &ui);
-        
-        EPSGetEigenpair(eps, nconv-1 , &eigr, &eigi, ur, ui);
-        VecView(ur, PETSC_VIEWER_DRAW_WORLD);
-        
-        VecDestroy(ur);
-        VecDestroy(ui);
-            
-        EPSGetValue(eps, nconv-1, &eigr, &eigi);
-        eigr = eigr * (PetscReal)(user.nx-1) * (PetscReal)(user.ny-1) / 2.0; 
-        eigi = eigi * (PetscReal)(user.nx-1) * (PetscReal)(user.ny-1) / 2.0; 
-        
-        PetscPrintf(PETSC_COMM_WORLD, "Smallest computed eigenvalue: %9f + %9f i\n", eigr, eigi); 
-}
+    
+    
+    
+    
+    
+    
     VecDestroyVecs(phi, user.k);
-    MatDestroy(K);
-    DADestroy(user.da);           
+    VecDestroyVecs(u, user.k);
+    VecDestroy(G);
+    MatDestroy(user.K);
+    DADestroy(user.da);  
+    EPSDestroy(user.eps);
     SlepcFinalize();
 }
 
 
-PetscErrorCode ComputeK(AppCtx user, Mat K, Vec phi)
+PetscErrorCode ComputeK(AppCtx user, Vec phi)
 {
+    Mat            K  = user.K;
     DA             da = user.da;
     PetscErrorCode ierr;
     PetscInt       i, j, mx, my, xm, ym, xs, ys;
@@ -184,13 +221,13 @@ PetscErrorCode ComputeK(AppCtx user, Mat K, Vec phi)
         for(i=xs; i<xs+xm; i++){
             row.i = i; row.j = j;
 	       if (i==0 || j==0 || i==user.nx-1 || j==user.ny-1){
-                v[0] = 2.0*(HxdHy + HydHx) + user.mu * local_phi[j][i];
+                v[0] = 2.0*(HxdHy + HydHx) + user.mu * (1.0 - local_phi[j][i]);
                 MatSetValuesStencil(K,1,&row,1,&row,v,INSERT_VALUES);
             } else {
                 v[0] = -HxdHy; col[0].i = i;   col[0].j = j-1;
                 v[1] = -HydHx; col[1].i = i-1; col[1].j = j;
                 v[2] = 2.0*(HxdHy + HydHx); col[2].i = row.i; col[2].j = row.j;
-                v[2] += user.mu * local_phi[j][i];
+                v[2] += user.mu * (1.0 - local_phi[j][i])*Hx*Hy;
                 v[3] = -HydHx; col[3].i = i+1; col[3].j = j;
                 v[4] = -HxdHy; col[4].i = i;   col[4].j = j+1;
                 MatSetValuesStencil(K, 1, &row, 5, col, v, INSERT_VALUES);
@@ -203,9 +240,36 @@ PetscErrorCode ComputeK(AppCtx user, Mat K, Vec phi)
     return 0;
 }
 
-PetscErrorCode ComputeLambda(AppCtx user, Mat K, Vec phi){
-
-
+PetscErrorCode ComputeLambdaU(AppCtx user, Vec phi, PetscScalar *lambda, Vec u){
+    PetscLogDouble   eps_ts, eps_tf, eps_t;
+    int              its;
+    Vec              ui;
+    PetscScalar      eigi, normu;
+    int              nconv;
+    
+    
+    ComputeK(user, phi);
+    EPSSetOperators(user.eps, user.K, PETSC_NULL);
+    PetscGetTime(&eps_ts);
+    EPSSolve(user.eps);
+    PetscGetTime(&eps_tf);
+    
+    eps_t = eps_tf - eps_ts;
+//    PetscPrintf(PETSC_COMM_WORLD, " Time spent on EPSSolve : %f sec\n", eps_t);
+//    EPSGetIterationNumber(user.eps, &its);
+//    PetscPrintf(PETSC_COMM_WORLD, " Number of iterations of eigenvalue solver: %d\n",its);
+//    DACreateGlobalVector(user.da, &ui);
+    
+    VecDuplicate(u, &ui);
+    EPSGetConverged(user.eps, &nconv);
+    EPSGetEigenpair(user.eps, nconv-1 , lambda, &eigi, u, ui);
+    VecNorm(u, NORM_2, &normu);
+    normu = 1.0 / normu;
+    VecScale(u, normu);
+    
+    VecDestroy(ui);
+        
+    *lambda = *lambda * (PetscReal)(user.nx-1) * (PetscReal)(user.ny-1) / 2.0; 
     return 0;
 }
 
@@ -214,7 +278,6 @@ extern PetscErrorCode InitPhiQuarter(AppCtx user, Vec phi){
     PetscInt       i, j, mx, my, xm, ym, xs, ys;
     PetscScalar    zero = 0.0, one  = 1.0;
     DAGetCorners(user.da, &xs, &ys, PETSC_NULL, &xm, &ym,PETSC_NULL);
-    PetscPrintf(PETSC_COMM_SELF, "xs=%d xm=%d ys=%d ym=%d\n", xs, xm, ys, ym);
 
     VecSet(phi, zero);
     DAVecGetArray(user.da, phi, &local_phi);
@@ -241,5 +304,11 @@ extern PetscErrorCode InitPhiRandom(AppCtx user, Vec phi){
     VecSetRandom(phi, rndm);
     PetscRandomDestroy(rndm);
 
+    return 0;
+}
+
+extern PetscErrorCode ComputeG(AppCtx user, Vec G, Vec u){
+    
+    VecPointwiseMult(G, u, u);
     return 0;
 }
