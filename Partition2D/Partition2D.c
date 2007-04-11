@@ -29,9 +29,9 @@ int main (int argc, char ** argv) {
     AppCtx           user;   
     Mat              K;
     Vec              u;
-    Vec              *phi;
+    Vec              tmp_phi, *phi;
     
-    int              N;
+    int              N, i;
     PetscTruth       flag;
     
     PetscMPIInt      numprocs, myrank;
@@ -76,15 +76,9 @@ int main (int argc, char ** argv) {
                PETSC_DECIDE, PETSC_DECIDE, 1, 1, PETSC_NULL, PETSC_NULL, &user.da);
     
     DAGetMatrix(user.da, MATMPIAIJ, &K);
-    
-//    PetscMalloc(user.k*sizeof(Vec),&phi);
-    
-    DACreateGlobalVector(user.da, &phi);
-    InitPhiRandom(user, phi);
-    VecView(phi, PETSC_VIEWER_STDOUT_WORLD);
-//    VecSet(phi, (PetscScalar) 0.0);
-
-    ComputeK(user, K, phi);
+    DACreateGlobalVector(user.da, &tmp_phi);
+    VecDuplicateVecs(tmp_phi, user.k, &phi);
+    VecDestroy(tmp_phi);
 //    MatView(K, PETSC_VIEWER_DRAW_WORLD);
     
     /* Create the eigensolver context */
@@ -115,42 +109,55 @@ int main (int argc, char ** argv) {
     
     
     /* solve the eigenvalue problem */
-    PetscGetTime(&eps_ts);
-    EPSSolve(eps);
-    PetscGetTime(&eps_tf);
-    
-    eps_t = eps_tf - eps_ts;
-    PetscPrintf(PETSC_COMM_WORLD, " Time spent on EPSSolve : %f sec\n", eps_t);
-    EPSGetIterationNumber(eps, &its);
-    PetscPrintf(PETSC_COMM_WORLD," Number of iterations of eigenvalue solver: %d\n",its);
-    
-    /* Display some information obout the EPS solver */
-    EPSGetType(eps,&type);
-    PetscPrintf(PETSC_COMM_WORLD," Solution method: %s\n\n",type);
-    EPSGetDimensions(eps,&nev,PETSC_NULL);
-    PetscPrintf(PETSC_COMM_WORLD," Number of requested eigenvalues: %d\n",nev);
-    EPSGetTolerances(eps,&tol,&maxit);
-    PetscPrintf(PETSC_COMM_WORLD," Stopping condition: tol=%.4g, maxit=%d\n",tol,maxit);
-    EPSGetConverged(eps,&nconv);
-    PetscPrintf(PETSC_COMM_WORLD," Number of converged eigenpairs: %d\n\n",nconv);
+    for (i=0; i<user.k; i++){
+        PetscPrintf(PETSC_COMM_WORLD, "phi[%d]\n", i);
+        InitPhiRandom(user, phi[i]);
+        VecView(phi[i], PETSC_VIEWER_DRAW_WORLD);
+        ComputeK(user, K, phi[i]);
 
-    for (its=0; its<nconv; its++){
-        EPSGetValue(eps, its, &eigr, &eigi);
-        PetscPrintf(PETSC_COMM_WORLD, "[%d] eigenvalue: %9f + %9f i\n", its, eigr, eigi); 
-    }
-    
-/*    MatGetVecs(K, PETSC_NULL, &ur);
-    MatGetVecs(K, PETSC_NULL, &ui);
-    
-    EPSGetEigenpair(eps, nconv-1 , &eigr, &eigi, ur, ui);
-    VecView(ur, PETSC_VIEWER_DRAW_WORLD);
-*/    
-    eigr = eigr * (PetscReal)(user.nx-1) * (PetscReal)(user.ny-1) / 2.0; 
-    eigi = eigi * (PetscReal)(user.nx-1) * (PetscReal)(user.ny-1) / 2.0; 
-
-    PetscPrintf(PETSC_COMM_WORLD, "Smallest computed eigenvalue: %9f + %9f i\n", eigr, eigi); 
-
-    VecDestroy(phi);
+        EPSSetOperators(eps, K, PETSC_NULL);
+        PetscGetTime(&eps_ts);
+        EPSSolve(eps);
+        PetscGetTime(&eps_tf);
+        
+        eps_t = eps_tf - eps_ts;
+        PetscPrintf(PETSC_COMM_WORLD, " Time spent on EPSSolve : %f sec\n", eps_t);
+        EPSGetIterationNumber(eps, &its);
+        PetscPrintf(PETSC_COMM_WORLD," Number of iterations of eigenvalue solver: %d\n",its);
+        
+        /* Display some information obout the EPS solver */
+        EPSGetType(eps,&type);
+        PetscPrintf(PETSC_COMM_WORLD," Solution method: %s\n\n",type);
+        EPSGetDimensions(eps,&nev,PETSC_NULL);
+        PetscPrintf(PETSC_COMM_WORLD," Number of requested eigenvalues: %d\n",nev);
+        EPSGetTolerances(eps,&tol,&maxit);
+        PetscPrintf(PETSC_COMM_WORLD," Stopping condition: tol=%.4g, maxit=%d\n",tol,maxit);
+        EPSGetConverged(eps,&nconv);
+        PetscPrintf(PETSC_COMM_WORLD," Number of converged eigenpairs: %d\n\n",nconv);
+        
+        /*
+            for (its=0; its<nconv; its++){
+            EPSGetValue(eps, its, &eigr, &eigi);
+            PetscPrintf(PETSC_COMM_WORLD, "[%d] eigenvalue: %9f + %9f i\n", its, eigr, eigi); 
+        }
+        */    
+        
+        DACreateGlobalVector(user.da, &ur);
+        DACreateGlobalVector(user.da, &ui);
+        
+        EPSGetEigenpair(eps, nconv-1 , &eigr, &eigi, ur, ui);
+        VecView(ur, PETSC_VIEWER_DRAW_WORLD);
+        
+        VecDestroy(ur);
+        VecDestroy(ui);
+            
+        EPSGetValue(eps, nconv-1, &eigr, &eigi);
+        eigr = eigr * (PetscReal)(user.nx-1) * (PetscReal)(user.ny-1) / 2.0; 
+        eigi = eigi * (PetscReal)(user.nx-1) * (PetscReal)(user.ny-1) / 2.0; 
+        
+        PetscPrintf(PETSC_COMM_WORLD, "Smallest computed eigenvalue: %9f + %9f i\n", eigr, eigi); 
+}
+    VecDestroyVecs(phi, user.k);
     MatDestroy(K);
     DADestroy(user.da);           
     SlepcFinalize();
