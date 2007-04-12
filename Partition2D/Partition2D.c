@@ -5,6 +5,7 @@ The matrix is scaled by a factor 2*hx*hy
 */
 
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "petscksp.h"
 #include "petscvec.h"
@@ -26,6 +27,8 @@ extern PetscErrorCode ComputeLambdaU(AppCtx user, Vec phi, PetscScalar *lambda, 
 extern PetscErrorCode ComputeG(AppCtx user, Vec G, Vec u);
 extern PetscErrorCode InitPhiQuarter(AppCtx user, Vec phi);
 extern PetscErrorCode InitPhiRandom(AppCtx user, Vec phi);
+extern PetscErrorCode VecView_VTK(Vec x, const char filename[]);
+extern PetscErrorCode VecView_Matlab(Vec x, const char filename[]);
 
 int main (int argc, char ** argv) {
     PetscErrorCode   ierr;
@@ -33,8 +36,14 @@ int main (int argc, char ** argv) {
     Vec              tmp_phi, *phi;
     Vec              *u, G, psi, vec_one;
     PetscScalar      *lambda, F, Fold;
-    PetscScalar      stepmax = 5.0e+6;
+    PetscScalar      stepmax = 1.0e+6;
     PetscScalar      error, tol = 1.0e-3;
+    const char       u_prfx[] = "results/Partition_U-";
+    const char       phi_prfx[] = "results/Partition_Phi-";
+    char             filename [ FILENAME_MAX ];
+    const char       sfx[] = ".txt";
+    
+
         
     int              N, i, it, maxit = 1000;
     PetscTruth       flag;
@@ -72,7 +81,7 @@ int main (int argc, char ** argv) {
     }    
     PetscPrintf(PETSC_COMM_WORLD, "\nOptimal Partition problem, N=%d (%dx%d grid)\n\n", 
                 N, user.nx, user.ny);
-
+                
     MPI_Comm_size(PETSC_COMM_WORLD, &numprocs);
     MPI_Comm_rank(PETSC_COMM_WORLD, &myrank);
     
@@ -110,8 +119,6 @@ int main (int argc, char ** argv) {
     STSetFromOptions(st);
     EPSSetFromOptions(user.eps);
     
-
-
     /*    
     for (i=0; i<user.k; i++){
         InitPhiRandom(user, phi[i]);
@@ -141,7 +148,7 @@ int main (int argc, char ** argv) {
     PetscPrintf(PETSC_COMM_WORLD, "F = %f\n", F);
     error = tol + 1.0;
     
-    while ( error > tol ){ 
+    while ( it < maxit ){ 
         it++;
         Fold = F;
         F = 0.0;
@@ -151,6 +158,7 @@ int main (int argc, char ** argv) {
             ComputeG(user, G, u[i]);
             VecAXPY(phi[i], user.step, G);
             VecAXPY(psi, (PetscScalar) 1.0, phi[i]);
+//            PetscPrintf(PETSC_COMM_WORLD, "i=%d\n", i);
         }
         // truncation
 //        VecView(psi, PETSC_VIEWER_DRAW_WORLD);
@@ -158,11 +166,7 @@ int main (int argc, char ** argv) {
         for (i=0; i<user.k; i++){
             VecPointwiseDivide(phi[i], phi[i], psi);
         }
-        for (i=0; i<user.k; i++){
-            if ( (it%10) == i ){
-                VecView(phi[i], PETSC_VIEWER_DRAW_WORLD);
-            }
-        }
+//            VecView(phi[it%user.k], PETSC_VIEWER_DRAW_WORLD);
         F = 0.0;
         for (i=0; i<user.k; i++){
             ComputeLambdaU(user, phi[i], &lambda[i], u[i]);
@@ -172,7 +176,7 @@ int main (int argc, char ** argv) {
 //        PetscPrintf(PETSC_COMM_WORLD, "F = %f\n", F);
     
         if (F<=Fold) {
-            user.step = user.step * 2.0;
+            user.step = user.step * 1.2;
             user.step = PetscMin(user.step, stepmax);
         }
         else {
@@ -181,14 +185,21 @@ int main (int argc, char ** argv) {
         error = (Fold - F) / F;
 //        error = PetscAbsReal(error); 
         PetscPrintf(PETSC_COMM_WORLD, "F = %f, step = %f, error = %f\n\n", F, user.step, error);
+
+        if (it%10 == 0){
+            for (i=0; i<user.k; i++){
+//                sprintf(filename, "%s%.3d-%.5d%s", u_prfx, i, it,sfx);
+                sprintf(filename, "%s%.3d%s", u_prfx, i,sfx);
+                PetscPrintf(PETSC_COMM_WORLD, "Saving %s\n", filename);
+                VecView_Matlab(u[i], filename);
+//                sprintf(filename, "%s%.3d-%.5d%s", phi_prfx, i, it, sfx);
+                sprintf(filename, "%s%.3d%s", phi_prfx, i, sfx);
+                PetscPrintf(PETSC_COMM_WORLD, "Saving %s\n", filename);
+                VecView_Matlab(phi[i], filename);
+//                VecView(phi[i], PETSC_VIEWER_DRAW_WORLD);
+            }
+        }
     }
-    
-        
-    
-    
-    
-    
-    
     
     VecDestroyVecs(phi, user.k);
     VecDestroyVecs(u, user.k);
@@ -310,5 +321,128 @@ extern PetscErrorCode InitPhiRandom(AppCtx user, Vec phi){
 extern PetscErrorCode ComputeG(AppCtx user, Vec G, Vec u){
     
     VecPointwiseMult(G, u, u);
+    return 0;
+}
+
+// The problem is in using PETSC_COMM_WORLD while accessing array[]
+// Should test locality of value and PETC_COMM_SELF
+PetscErrorCode VecView_VTK(Vec x, const char filename[])
+{
+  MPI_Comm           comm;
+  DA                 da;
+//  Vec                coords;
+  PetscViewer        viewer;
+  PetscScalar       *array, *values;
+  PetscInt           n, N, maxn, mx, my, dof;
+  PetscInt           xs, xm, ys, ym;
+  PetscInt           i, p;
+  MPI_Status         status;
+  PetscMPIInt        rank, size, tag;
+  PetscErrorCode     ierr;
+
+  PetscFunctionBegin;
+  ierr = PetscObjectGetComm((PetscObject) x, &comm);CHKERRQ(ierr);
+  ierr = PetscViewerASCIIOpen(comm, filename, &viewer);CHKERRQ(ierr);
+
+  ierr = VecGetSize(x, &N); CHKERRQ(ierr);
+  ierr = VecGetLocalSize(x, &n); CHKERRQ(ierr);
+  ierr = PetscObjectQuery((PetscObject) x, "DA", (PetscObject *) &da);CHKERRQ(ierr);
+  if (!da) SETERRQ(PETSC_ERR_ARG_WRONG,"Vector not generated from a DA");
+
+  ierr = DAGetInfo(da, 0, &mx, &my, 0,0,0,0, &dof,0,0,0);CHKERRQ(ierr);
+  
+  ierr = PetscViewerASCIIPrintf(viewer, "# vtk DataFile Version 2.0\n");CHKERRQ(ierr);
+  ierr = PetscViewerASCIIPrintf(viewer, "Partition2D\n");CHKERRQ(ierr);
+  ierr = PetscViewerASCIIPrintf(viewer, "ASCII\n");CHKERRQ(ierr);
+  
+  ierr = PetscViewerASCIIPrintf(viewer, "DATASET RECTILINEAR_GRID\n");CHKERRQ(ierr);
+  ierr = PetscViewerASCIIPrintf(viewer, "DIMENSIONS %d %d %d\n", mx, my, 1);CHKERRQ(ierr);
+
+  ierr = PetscViewerASCIIPrintf(viewer, "X_COORDINATES %d double\n", mx);CHKERRQ(ierr);
+  for(i = 0; i < mx; i++) {
+    ierr = PetscViewerASCIIPrintf(viewer, "%G ", (i+1.0) / (PetscReal) mx);CHKERRQ(ierr);
+  }
+  ierr = PetscViewerASCIIPrintf(viewer, "\n");CHKERRQ(ierr);
+  ierr = PetscViewerASCIIPrintf(viewer, "Y_COORDINATES %d double\n", my);CHKERRQ(ierr);
+  for(i = 0; i < my; i++) {
+    ierr = PetscViewerASCIIPrintf(viewer, "%G ", (i+1.0) / (PetscReal) my);CHKERRQ(ierr);
+  }
+  ierr = PetscViewerASCIIPrintf(viewer, "\n");CHKERRQ(ierr);
+  ierr = PetscViewerASCIIPrintf(viewer, "Z_COORDINATES %d double\n", 1);CHKERRQ(ierr);
+  ierr = PetscViewerASCIIPrintf(viewer, "%G\n", 0.0);CHKERRQ(ierr);
+
+  ierr = PetscViewerASCIIPrintf(viewer, "POINT_DATA %d\n", N);CHKERRQ(ierr);
+  ierr = PetscViewerASCIIPrintf(viewer, "SCALARS scalars double %d\n", dof);CHKERRQ(ierr);
+  ierr = PetscViewerASCIIPrintf(viewer, "LOOKUP_TABLE default\n");CHKERRQ(ierr);
+  ierr = VecGetArray(x, &array);CHKERRQ(ierr);
+  /* Determine maximum message to arrive */
+  ierr = MPI_Comm_rank(comm, &rank);CHKERRQ(ierr);
+  ierr = MPI_Comm_size(comm, &size);CHKERRQ(ierr);
+  ierr = MPI_Reduce(&n, &maxn, 1, MPIU_INT, MPI_MAX, 0, comm);CHKERRQ(ierr);
+  tag  = ((PetscObject) viewer)->tag;
+  if (!rank) {
+    ierr = PetscMalloc((maxn+1) * sizeof(PetscScalar), &values);CHKERRQ(ierr);
+    for(i = 0; i < n; i++) {
+      ierr = PetscViewerASCIIPrintf(viewer, "%G\n", PetscRealPart(array[i]));CHKERRQ(ierr);
+    }
+    for(p = 1; p < size; p++) {
+      ierr = MPI_Recv(values, (PetscMPIInt) n, MPIU_SCALAR, p, tag, comm, &status);CHKERRQ(ierr);
+      ierr = MPI_Get_count(&status, MPIU_SCALAR, &n);CHKERRQ(ierr);        
+      for(i = 0; i < n; i++) {
+        ierr = PetscViewerASCIIPrintf(viewer, "%G\n", PetscRealPart(array[i]));CHKERRQ(ierr);
+      }
+    }
+    ierr = PetscFree(values);CHKERRQ(ierr);
+  } else {
+    ierr = MPI_Send(array, n, MPIU_SCALAR, 0, tag, comm);CHKERRQ(ierr);
+  }
+  ierr = VecRestoreArray(x, &array);CHKERRQ(ierr);
+  ierr = PetscViewerFlush(viewer);CHKERRQ(ierr);
+  ierr = PetscViewerDestroy(viewer);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+PetscErrorCode VecView_Matlab(Vec x, const char filename[]){
+    Vec           natural, io;
+    VecScatter    tozero;
+    PetscMPIInt   myrank;
+    int           N;
+    PetscScalar   *io_array;
+    DA            da;
+    PetscViewer   viewer;
+    int           i, j, mx, my;
+    
+    MPI_Comm_rank(PETSC_COMM_WORLD, &myrank);
+    VecGetSize(x, &N);
+
+    PetscObjectQuery((PetscObject) x, "DA", (PetscObject *) &da);
+    if (!da) SETERRQ(PETSC_ERR_ARG_WRONG,"Vector not generated from a DA");
+    DAGetInfo(da, 0, &mx, &my, 0,0,0,0, 0,0,0,0);
+
+    DACreateNaturalVector(da, &natural);
+    DAGlobalToNaturalBegin(da, x, INSERT_VALUES, natural);
+    DAGlobalToNaturalEnd(da, x, INSERT_VALUES, natural);
+    
+    VecScatterCreateToZero(natural, &tozero, &io);
+    VecScatterBegin(natural, io, INSERT_VALUES, SCATTER_FORWARD, tozero);
+    VecScatterEnd(natural, io, INSERT_VALUES, SCATTER_FORWARD, tozero);
+    VecScatterDestroy(tozero);
+    VecDestroy(natural);
+
+    VecGetArray(io, &io_array);    
+
+    if (myrank ==  0){
+        PetscViewerASCIIOpen(PETSC_COMM_SELF, filename, &viewer);
+        for (j=0; j<my; j++){
+            for(i=0; i<mx; i++){
+                PetscViewerASCIIPrintf(viewer, "%G   ", PetscRealPart(io_array[j*mx+i]));
+            }
+            PetscViewerASCIIPrintf(viewer, "\n");
+        }
+        PetscViewerFlush(viewer);
+        PetscViewerDestroy(viewer);
+    }
+    VecRestoreArray(io, &io_array);    
+    VecDestroy(io);
     return 0;
 }
