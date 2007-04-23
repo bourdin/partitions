@@ -4,3 +4,6 @@ include ${SLEPC_DIR}/bmake/slepc_common
 
 Partition2D: Partition2D.o  chkopts
 	-${CLINKER} -o Partition2D Partition2D.o ${SLEPC_LIB}
+
+Partition2DPer: Partition2DPer.o  chkopts
+	-${CLINKER} -o Partition2DPer Partition2DPer.o ${SLEPC_LIB}
