@@ -86,7 +86,7 @@ int main (int argc, char ** argv) {
     MPI_Comm_size(PETSC_COMM_WORLD, &numprocs);
     MPI_Comm_rank(PETSC_COMM_WORLD, &myrank);
     
-    DACreate2d(PETSC_COMM_WORLD, DA_NONPERIODIC, DA_STENCIL_STAR, user.nx, user.ny,
+    DACreate2d(PETSC_COMM_WORLD, DA_XYPERIODIC, DA_STENCIL_STAR, user.nx, user.ny,
                PETSC_DECIDE, PETSC_DECIDE, 1, 1, PETSC_NULL, PETSC_NULL, &user.da);
     
     DAGetMatrix(user.da, MATMPIAIJ, &user.K);
@@ -189,26 +189,29 @@ int main (int argc, char ** argv) {
 
         if (it%10 == 0){
             for (i=0; i<user.k; i++){
+                VecView(phi[i], PETSC_VIEWER_DRAW_WORLD);
+            }            
+            
+            /*
+            for (i=0; i<user.k; i++){
 //                sprintf(filename, "%s%.3d-%.5d%s", u_prfx, i, it,sfx);
                 sprintf(filename, "%s%.3d%s", u_prfx, i, txtsfx);
                 PetscPrintf(PETSC_COMM_WORLD, "Saving %s\n", filename);
                 VecView_TXT(u[i], filename);
-/*
-                sprintf(filename, "%s%.3d%s", u_prfx, i, rawsfx);
-                PetscPrintf(PETSC_COMM_WORLD, "Saving %s\n", filename);
-                VecView_RAW(u[i], filename);
-*/
+//                sprintf(filename, "%s%.3d%s", u_prfx, i, rawsfx);
+//                PetscPrintf(PETSC_COMM_WORLD, "Saving %s\n", filename);
+//                VecView_RAW(u[i], filename);
+
 
 //                sprintf(filename, "%s%.3d-%.5d%s", phi_prfx, i, it, sfx);
                 sprintf(filename, "%s%.3d%s", phi_prfx, i, txtsfx);
                 PetscPrintf(PETSC_COMM_WORLD, "Saving %s\n", filename);
                 VecView_TXT(phi[i], filename);
-/*                sprintf(filename, "%s%.3d%s", phi_prfx, i, rawsfx);
-                PetscPrintf(PETSC_COMM_WORLD, "Saving %s\n", filename);
-                VecView_RAW(phi[i], filename);
-*/
-//                VecView(phi[i], PETSC_VIEWER_DRAW_WORLD);
+//                sprintf(filename, "%s%.3d%s", phi_prfx, i, rawsfx);
+//                PetscPrintf(PETSC_COMM_WORLD, "Saving %s\n", filename);
+//                VecView_RAW(phi[i], filename);
             }
+            */
         }
     }
     
@@ -242,10 +245,10 @@ PetscErrorCode ComputeK(AppCtx user, Vec phi)
     for (j=ys; j<ys+ym; j++){
         for(i=xs; i<xs+xm; i++){
             row.i = i; row.j = j;
-	       if (i==0 || j==0 || i==user.nx-1 || j==user.ny-1){
-                v[0] = 2.0*(HxdHy + HydHx) + user.mu * (1.0 - local_phi[j][i]);
-                MatSetValuesStencil(K,1,&row,1,&row,v,INSERT_VALUES);
-            } else {
+//	       if (i==0 || j==0 || i==user.nx-1 || j==user.ny-1){
+//                v[0] = 2.0*(HxdHy + HydHx) + user.mu * (1.0 - local_phi[j][i]);
+//                MatSetValuesStencil(K,1,&row,1,&row,v,INSERT_VALUES);
+//            } else {
                 v[0] = -HxdHy; col[0].i = i;   col[0].j = j-1;
                 v[1] = -HydHx; col[1].i = i-1; col[1].j = j;
                 v[2] = 2.0*(HxdHy + HydHx); col[2].i = row.i; col[2].j = row.j;
@@ -253,7 +256,7 @@ PetscErrorCode ComputeK(AppCtx user, Vec phi)
                 v[3] = -HydHx; col[3].i = i+1; col[3].j = j;
                 v[4] = -HxdHy; col[4].i = i;   col[4].j = j+1;
                 MatSetValuesStencil(K, 1, &row, 5, col, v, INSERT_VALUES);
-        }
+//        }
       }
     }
     DAVecRestoreArray(user.da, phi, &local_phi);
