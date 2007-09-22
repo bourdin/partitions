@@ -435,8 +435,8 @@ PetscErrorCode VecView_TXT(Vec x, const char filename[]){
     DAGlobalToNaturalEnd(da, x, INSERT_VALUES, natural);
     
     VecScatterCreateToZero(natural, &tozero, &io);
-    VecScatterBegin(natural, io, INSERT_VALUES, SCATTER_FORWARD, tozero);
-    VecScatterEnd(natural, io, INSERT_VALUES, SCATTER_FORWARD, tozero);
+    VecScatterBegin(tozero, natural, io, INSERT_VALUES, SCATTER_FORWARD);
+    VecScatterEnd(tozero, natural, io, INSERT_VALUES, SCATTER_FORWARD);
     VecScatterDestroy(tozero);
     VecDestroy(natural);
 
@@ -479,8 +479,8 @@ PetscErrorCode VecView_RAW(Vec x, const char filename[]){
     DAGlobalToNaturalEnd(da, x, INSERT_VALUES, natural);
     
     VecScatterCreateToZero(natural, &tozero, &io);
-    VecScatterBegin(natural, io, INSERT_VALUES, SCATTER_FORWARD, tozero);
-    VecScatterEnd(natural, io, INSERT_VALUES, SCATTER_FORWARD, tozero);
+    VecScatterBegin(tozero, natural, io, INSERT_VALUES, SCATTER_FORWARD);
+    VecScatterEnd(tozero, natural, io, INSERT_VALUES, SCATTER_FORWARD);
     VecScatterDestroy(tozero);
     VecDestroy(natural);
 
