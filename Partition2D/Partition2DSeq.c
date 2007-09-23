@@ -176,8 +176,8 @@ int main (int argc, char ** argv) {
 		VecPointwiseDivide(phi, phi, psi);
 		F = 0.0;
 		ComputeLambdaU(user, phi, &lambda, u);
-		PetscSynchronizedPrintf(PETSC_COMM_WORLD, "		 lambda[%d] = %f\n", myrank, lambda);
-      PetscSynchronizedFlush(PETSC_COMM_WORLD);
+//		PetscSynchronizedPrintf(PETSC_COMM_WORLD, "		 lambda[%d] = %f\n", myrank, lambda);
+//      PetscSynchronizedFlush(PETSC_COMM_WORLD);
       MPI_Allreduce(&lambda, &F, 1, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
 
 		if (F<=Fold) {
@@ -304,11 +304,11 @@ PetscErrorCode ComputeLambdaU(AppCtx user, Vec phi, PetscScalar *lambda, Vec u){
 	 normu = 1.0 / normu;
 	 VecScale(u, normu);
 	 
-	 PetscSynchronizedPrintf(PETSC_COMM_WORLD, "lambda[%d] = %f EPSSolve converged in %f sec %d iterations\n", myrank, lambda, eps_t, its);
-	 PetscSynchronizedFlush(PETSC_COMM_WORLD);
 	 VecDestroy(ui);
 		  
 	 *lambda = *lambda * (PetscReal)(user.nx-1) * (PetscReal)(user.ny-1) / 2.0; 
+	 PetscSynchronizedPrintf(PETSC_COMM_WORLD, "lambda[%d] = %f    EPSSolve converged in %f s for %d iterations\n", myrank, *lambda, eps_t, its);
+	 PetscSynchronizedFlush(PETSC_COMM_WORLD);
 	 return 0;
 }
 
