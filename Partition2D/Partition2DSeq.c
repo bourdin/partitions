@@ -149,8 +149,6 @@ int main (int argc, char ** argv) {
 	 PetscPrintf(PETSC_COMM_WORLD, "Iteration %d:\n", it);
     ComputeLambdaU(user, phi, &lambda, u);
    
-    PetscSynchronizedPrintf(PETSC_COMM_WORLD, "		lambda[%d] = %f\n", myrank, lambda);
-    PetscSynchronizedFlush(PETSC_COMM_WORLD);
     MPI_Allreduce(&lambda, &F, 1, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
 
 	 error = tol + 1.0;
@@ -307,7 +305,7 @@ PetscErrorCode ComputeLambdaU(AppCtx user, Vec phi, PetscScalar *lambda, Vec u){
 	 VecDestroy(ui);
 		  
 	 *lambda = *lambda * (PetscReal)(user.nx-1) * (PetscReal)(user.ny-1) / 2.0; 
-	 PetscSynchronizedPrintf(PETSC_COMM_WORLD, "lambda[%d] = %f    EPSSolve converged in %f s for %d iterations\n", myrank, *lambda, eps_t, its);
+	 PetscSynchronizedPrintf(PETSC_COMM_WORLD, "        lambda[%d] = %f    EPSSolve converged in %f s for %d iterations\n", myrank, *lambda, eps_t, its);
 	 PetscSynchronizedFlush(PETSC_COMM_WORLD);
 	 return 0;
 }
