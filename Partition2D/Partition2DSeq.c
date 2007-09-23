@@ -97,7 +97,7 @@ int main (int argc, char ** argv) {
 	 PetscOptionsGetTruth(PETSC_NULL, "-periodic", &user.per, 0);
 	 PetscPrintf(PETSC_COMM_WORLD, "\nOptimal Partition problem, N=%d (%dx%d grid)\n\n", 
 					 N, user.nx, user.ny);
-	 PetscLogPrintSummary(MPI_COMM_WORLD,"petsc_log_summary");	  
+	 PetscLogPrintSummary(MPI_COMM_WORLD,"petsc_log_summary.log");	  
 
 	 if (user.per) {
 		PetscPrintf(PETSC_COMM_WORLD, "Using periodic boundary conditions\n");
@@ -179,7 +179,6 @@ int main (int argc, char ** argv) {
 		PetscSynchronizedPrintf(PETSC_COMM_WORLD, "		 lambda[%d] = %f\n", myrank, lambda);
       PetscSynchronizedFlush(PETSC_COMM_WORLD);
       MPI_Allreduce(&lambda, &F, 1, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
-      PetscPrintf(PETSC_COMM_WORLD, "F = %f\n", F);
 
 		if (F<=Fold) {
          user.step = user.step * 1.2;
@@ -297,8 +296,6 @@ PetscErrorCode ComputeLambdaU(AppCtx user, Vec phi, PetscScalar *lambda, Vec u){
 	 eps_t = eps_tf - eps_ts;
 	 EPSGetIterationNumber(user.eps, &its);
 
-	 PetscSynchronizedPrintf(PETSC_COMM_WORLD, "[%d] EPSSolve converged in %d iterations (%f sec)\n", myrank, its, eps_t);
-	 PetscSynchronizedFlush(PETSC_COMM_WORLD);
 	 
 	 VecDuplicate(u, &ui);
 	 EPSGetConverged(user.eps, &nconv);
@@ -307,6 +304,8 @@ PetscErrorCode ComputeLambdaU(AppCtx user, Vec phi, PetscScalar *lambda, Vec u){
 	 normu = 1.0 / normu;
 	 VecScale(u, normu);
 	 
+	 PetscSynchronizedPrintf(PETSC_COMM_WORLD, "lambda[%d] = %f EPSSolve converged in %f sec %d iterations\n", myrank, lambda, eps_t, its);
+	 PetscSynchronizedFlush(PETSC_COMM_WORLD);
 	 VecDestroy(ui);
 		  
 	 *lambda = *lambda * (PetscReal)(user.nx-1) * (PetscReal)(user.ny-1) / 2.0; 
