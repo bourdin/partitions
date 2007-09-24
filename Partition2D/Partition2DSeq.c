@@ -51,7 +51,7 @@ int main (int argc, char ** argv) {
 	 PetscScalar      *phi_array, *psi_array;
 
 		  
-	 int				   N, i, it, maxit = 1000;
+	 int				   N, i, it, maxit = 5000;
 	 PetscTruth			flag;
 	 
 	 PetscMPIInt		numprocs, myrank;
@@ -137,7 +137,7 @@ int main (int argc, char ** argv) {
 	 EPSSetFromOptions(user.eps);
 	 
     InitPhiRandom(user, phi);
-	 VecScale(phi, (PetscScalar) .1);
+//	 VecScale(phi, (PetscScalar) .1);
 
 	 sprintf(filename, "%s%.3d%s", phi_prfx, myrank, txtsfx);
 	 PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
@@ -158,10 +158,8 @@ int main (int argc, char ** argv) {
 		Fold = F;
 		F = 0.0;
 		PetscPrintf(PETSC_COMM_WORLD, "Iteration %d:\n", it);
-		VecSet(psi, (PetscScalar) 0.0);
 		ComputeG(user, G, u);
 		VecAXPY(phi, user.step, G);
-      VecSet(psi, (PetscScalar) 0.0);
       VecGetArray(psi, &psi_array);
       VecGetArray(phi, &phi_array);
       MPI_Allreduce(phi_array, psi_array, user.nx * user.ny, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);

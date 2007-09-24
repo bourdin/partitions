@@ -9,7 +9,7 @@ U=zeros(nx,ny,k);
 Phi=zeros(nx,ny,k);
 for i=1:k,
     U_filename=strcat('Partition_U-', num2str(i-1, '%.3d'), '-', num2str(iter,'%.5d'),'.txt');
-    Phi_filename=strcat('Partition_U-', num2str(i-1, '%.3d'), '-', num2str(iter,'%.5d'),'.txt');
+    Phi_filename=strcat('Partition_Phi-', num2str(i-1, '%.3d'), '-', num2str(iter,'%.5d'),'.txt');
     U(:,:,i) = load(U_filename);
     Phi(:,:,i) = load(Phi_filename);
 end
