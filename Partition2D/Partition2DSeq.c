@@ -47,7 +47,7 @@ int main (int argc, char ** argv) {
 	 const char			rawsfx[] = ".raw";
 	 const char			vtksfx[] = ".vtk";
 	 PetscScalar      *phi_array, *psi_array;
-
+    PetscScalar      muinit, mufinal;
 		  
 	 int				   N, i, it;
 	 PetscInt         maxit = 1000;
@@ -86,7 +86,11 @@ int main (int argc, char ** argv) {
 	 PetscOptionsGetInt(PETSC_NULL, "-ny", &user.ny, &flag);	 
 	 if( flag==PETSC_FALSE ) user.ny=user.nx;
 	 N = user.nx*user.ny;
-	 PetscOptionsGetScalar(PETSC_NULL, "-mu", &user.mu, PETSC_NULL);
+	 PetscOptionsGetScalar(PETSC_NULL, "-muinit", &muinit, PETSC_NULL);
+	 mufinal = muinit;
+	 PetscOptionsGetScalar(PETSC_NULL, "-mufinal", &mufinal, PETSC_NULL);
+	 user.mu = muinit;
+	 
 	 user.step = 10.0;
 	 PetscOptionsGetScalar(PETSC_NULL, "-step", &user.step, PETSC_NULL);
 	 
@@ -163,6 +167,8 @@ int main (int argc, char ** argv) {
 
 	 while ( it < maxit ){ 
 		it++;
+		user.mu = PetscMin(muinit + (PetscScalar) (2*it) / (PetscScalar) maxit * (mufinal - muinit), mufinal);
+		
 		Fold = F;
 		F = 0.0;
 		PetscPrintf(PETSC_COMM_WORLD, "Iteration %d:\n", it);
@@ -190,7 +196,7 @@ int main (int argc, char ** argv) {
 		   user.step = user.step / 2.0;
       }
 		error = (Fold - F) / F;
-		PetscPrintf(PETSC_COMM_WORLD, "F = %f, step = %f, error = %f\n\n", F, user.step, error);
+		PetscPrintf(PETSC_COMM_WORLD, "F = %f, step = %f, error = %f, mu = %f\n\n", F, user.step, error, user.mu);
 
       PetscViewerASCIIPrintf(viewer, "%d   %f   ", it, F);
       PetscViewerASCIISynchronizedPrintf(viewer, "%f   ", lambda);

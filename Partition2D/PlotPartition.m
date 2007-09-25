@@ -35,10 +35,10 @@ colorbar;
 
 figure(2);
 clf;
-line([1 3*nx],        [ny+1, ny+1],     [1,1],  'LineWidth', 1, 'Color', [.75 .75 .75]);
-line([1 3*nx],        [2*ny+1, 2*ny+1], [1,1],  'LineWidth', 1, 'Color', [.75 .75 .75]);
-line([nx+1 nx+1],     [1, 3*ny],        [1,1],  'LineWidth', 1, 'Color', [.75 .75 .75]);
-line([2*nx+1 2*nx+1], [1, 3*ny],        [1,1],  'LineWidth', 1, 'Color', [.75 .75 .75]);
+line([1 3*nx],        [ny+1, ny+1],     [k+1,k+1],  'LineWidth', 1, 'Color', [.75 .75 .75]);
+line([1 3*nx],        [2*ny+1, 2*ny+1], [k+1,k+1],  'LineWidth', 1, 'Color', [.75 .75 .75]);
+line([nx+1 nx+1],     [1, 3*ny],        [k+1,k+1],  'LineWidth', 1, 'Color', [.75 .75 .75]);
+line([2*nx+1 2*nx+1], [1, 3*ny],        [k+1,k+1],  'LineWidth', 1, 'Color', [.75 .75 .75]);
 surface([[Phi_all, Phi_all, Phi_all]; [Phi_all, Phi_all, Phi_all] ; [Phi_all, Phi_all, Phi_all]]);
 title(strcat('Phi: iteration ',num2str(iter)));
 axis equal;
