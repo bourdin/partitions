@@ -39,6 +39,7 @@ int main (int argc, char ** argv) {
 	 Vec					u, G, psi, vec_one;
 	 PetscScalar		lambda, F, Fold;
 	 PetscScalar		stepmax = 1.0e+6;
+	 PetscScalar		stepmin;
 	 PetscScalar		error, tol = 1.0e-3;
 	 const char			u_prfx[] = "Partition_U-";
 	 const char			phi_prfx[] = "Partition_Phi-";
@@ -92,6 +93,7 @@ int main (int argc, char ** argv) {
 	 user.mu = muinit;
 	 
 	 user.step = 10.0;
+	 stepmin   = user.step;
 	 PetscOptionsGetScalar(PETSC_NULL, "-step", &user.step, PETSC_NULL);
 	 
 	 if (numprocs==1) {
@@ -129,6 +131,8 @@ int main (int argc, char ** argv) {
 	 EPSSetOperators(user.eps, user.K, PETSC_NULL);
 	 EPSSetProblemType(user.eps, EPS_HEP);
 	 EPSGetST(user.eps, &st);
+	 EPSSetDimensions(user.eps, 1, 10);
+//	 EPSSetWhichEigenPair(user.eps, EPS_SMALLEST_MAGNITUDE);
 	 
 	 STSetType(st, st_type);
 	 STSetShift(st, st_shift);
@@ -188,13 +192,18 @@ int main (int argc, char ** argv) {
 		ComputeLambdaU(user, phi, &lambda, u);
       MPI_Allreduce(&lambda, &F, 1, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
 
+
 		if (F<=Fold) {
          user.step = user.step * 1.2;
 			user.step = PetscMin(user.step, stepmax);
       }
 		else {
 		   user.step = user.step / 2.0;
+         user.step = PetscMax(user.step, stepmin);
       }
+
+
+         
 		error = (Fold - F) / F;
 		PetscPrintf(PETSC_COMM_WORLD, "F = %f, step = %f, error = %f, mu = %f\n\n", F, user.step, error, user.mu);
 
