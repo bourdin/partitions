@@ -15,8 +15,6 @@ The matrix is scaled by a factor 2*hx*hy
 typedef struct {
 	 PetscInt		nx, ny; /* Dimension of the discretized domain */
 	 PetscScalar	mu;	  /* Penalization factor for the computation of the eigenvalue */
-//	 int				k;		  /* Number of domain to partition into */
-//  k willbe the number of cpus
 	 PetscTruth		per;	  /* true for periodic boundary conditions, false otherwise */
 	 DA				da;	  /* Information about the distributed layout */
 	 PetscScalar	step;	  /* Initial step of the steepest descent methods */
@@ -51,10 +49,12 @@ int main (int argc, char ** argv) {
 	 PetscScalar      *phi_array, *psi_array;
 
 		  
-	 int				   N, i, it, maxit = 5000;
+	 int				   N, i, it;
+	 PetscInt         maxit = 1000;
 	 PetscTruth			flag;
 	 
 	 PetscMPIInt		numprocs, myrank;
+	 PetscViewer      viewer;
 	 
 	 /* Eigenvalue solver stuff */
 	 EPSType			   type;
@@ -80,6 +80,7 @@ int main (int argc, char ** argv) {
 //      return -1;
 //      }
 
+	 PetscOptionsGetInt(PETSC_NULL, "-maxit", &maxit, PETSC_NULL);
 	 user.nx = 10;
 	 PetscOptionsGetInt(PETSC_NULL, "-nx", &user.nx, PETSC_NULL);
 	 PetscOptionsGetInt(PETSC_NULL, "-ny", &user.ny, &flag);	 
@@ -153,6 +154,13 @@ int main (int argc, char ** argv) {
 
 	 error = tol + 1.0;
 	 
+	 it = 0.0;
+    PetscViewerASCIIOpen(PETSC_COMM_WORLD, "Partition.log", &viewer);
+    PetscViewerASCIIPrintf(viewer, "%d   %f   ", it, F);
+    PetscViewerASCIISynchronizedPrintf(viewer, "%f   ", lambda);
+    PetscViewerFlush(viewer);
+    PetscViewerASCIIPrintf(viewer, "\n", it);
+
 	 while ( it < maxit ){ 
 		it++;
 		Fold = F;
@@ -172,8 +180,6 @@ int main (int argc, char ** argv) {
 		VecPointwiseDivide(phi, phi, psi);
 		F = 0.0;
 		ComputeLambdaU(user, phi, &lambda, u);
-//		PetscSynchronizedPrintf(PETSC_COMM_WORLD, "		 lambda[%d] = %f\n", myrank, lambda);
-//      PetscSynchronizedFlush(PETSC_COMM_WORLD);
       MPI_Allreduce(&lambda, &F, 1, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
 
 		if (F<=Fold) {
@@ -186,40 +192,36 @@ int main (int argc, char ** argv) {
 		error = (Fold - F) / F;
 		PetscPrintf(PETSC_COMM_WORLD, "F = %f, step = %f, error = %f\n\n", F, user.step, error);
 
-////*********************************************************************************************
-//      //THIS STILL NEEDS TO BE UPDATED
+      PetscViewerASCIIPrintf(viewer, "%d   %f   ", it, F);
+      PetscViewerASCIISynchronizedPrintf(viewer, "%f   ", lambda);
+      PetscViewerFlush(viewer);
+      PetscViewerASCIIPrintf(viewer, "\n", it);
+      
+      
 		  if (it%10 == 0){
-////				  for (i=0; i<user.k; i++){
-////						VecView(phi[i], PETSC_VIEWER_DRAW_WORLD);
-////				  }				
-//				
-//				
-//				for (i=0; i<user.k; i++){
-  					 sprintf(filename, "%s%.3d-%.5d%s", u_prfx, myrank, it,txtsfx);
-					 //sprintf(filename, "%s%.3d%s", u_prfx, myrank, txtsfx);
+ 					 sprintf(filename, "%s%.3d-%.5d%s", u_prfx, myrank, it,txtsfx);
+//					 sprintf(filename, "%s%.3d%s", u_prfx, myrank, txtsfx);
 					 PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
 					 VecView_TXT(u, filename);
-//
-//					/*
-//					 sprintf(filename, "%s%.3d-%.5d%s", u_prfx, myrank, it, vtksfx);
-//					 PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
-//					 VecView_VTKASCII(u, filename);
-//					*/
-//
-						sprintf(filename, "%s%.3d-%.5d%s", phi_prfx, myrank, it, txtsfx);
+
+					/*
+					 sprintf(filename, "%s%.3d-%.5d%s", u_prfx, myrank, it, vtksfx);
+					 PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
+					 VecView_VTKASCII(u, filename);
+					*/
+
+ 					 sprintf(filename, "%s%.3d-%.5d%s", phi_prfx, myrank, it, txtsfx);
 //					 sprintf(filename, "%s%.3d%s", phi_prfx, myrank, txtsfx);
 					 PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
 					 VecView_TXT(phi, filename);
-//
-//					/*
-//					 sprintf(filename, "%s%.3d-%.5d%s", phi_prfx, myrank, it, vtksfx);
-//					 PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
-//					 VecView_VTKASCII(phi, filename);
-//					 */
-//				}
+
+					/*
+					 sprintf(filename, "%s%.3d-%.5d%s", phi_prfx, myrank, it, vtksfx);
+					 PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
+					 VecView_VTKASCII(phi, filename);
+					 */
 		  }
 	 }
-//	 
 	 VecDestroy(phi);
 	 VecDestroy(psi);
 	 VecDestroy(u);
@@ -228,6 +230,7 @@ int main (int argc, char ** argv) {
 	 DADestroy(user.da);	 
 	 EPSDestroy(user.eps);
 	 PetscLogPrintSummary(MPI_COMM_WORLD,"petsc_log_summary.log");		
+    PetscViewerDestroy(viewer);
 
 	 SlepcFinalize();
 }
