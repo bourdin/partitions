@@ -21,9 +21,11 @@ for i=1:k,
     Phi_all = Phi_all + i * Phi(:,:,i);
 end
 
-figure(1);
-clf;
+close(1);
+pfigure(1);
+hold off;
 line([1 3*nx],        [ny+1, ny+1],     [1,1],  'LineWidth', 1, 'Color', [.75 .75 .75]);
+hold on;
 line([1 3*nx],        [2*ny+1, 2*ny+1], [1,1],  'LineWidth', 1, 'Color', [.75 .75 .75]);
 line([nx+1 nx+1],     [1, 2*ny],        [1,1],  'LineWidth', 1, 'Color', [.75 .75 .75]);
 line([2*nx+1 2*nx+1], [1, 3*ny],        [1,1],  'LineWidth', 1, 'Color', [.75 .75 .75]);
@@ -33,9 +35,11 @@ axis equal;
 shading interp;
 colorbar;
 
-figure(2);
-clf;
+close(2);
+pfigure(2);
+hold off;
 line([1 3*nx],        [ny+1, ny+1],     [k+1,k+1],  'LineWidth', 1, 'Color', [.75 .75 .75]);
+hold on;
 line([1 3*nx],        [2*ny+1, 2*ny+1], [k+1,k+1],  'LineWidth', 1, 'Color', [.75 .75 .75]);
 line([nx+1 nx+1],     [1, 3*ny],        [k+1,k+1],  'LineWidth', 1, 'Color', [.75 .75 .75]);
 line([2*nx+1 2*nx+1], [1, 3*ny],        [k+1,k+1],  'LineWidth', 1, 'Color', [.75 .75 .75]);
