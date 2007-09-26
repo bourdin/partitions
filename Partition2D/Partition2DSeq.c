@@ -20,6 +20,7 @@ typedef struct {
 	 PetscScalar	step;	  /* Initial step of the steepest descent methods */
 	 EPS				eps;	  /* Eigenvalue solver context */
 	 Mat				K;		  /* Matrix for the Laplacian */
+	 PetscInt      epsnum; /* which eigenvalues are we optimizing */
 } AppCtx;
 
 extern PetscErrorCode ComputeK(AppCtx user, Vec phi);
@@ -81,6 +82,9 @@ int main (int argc, char ** argv) {
 //      return -1;
 //      }
 
+    user.epsnum = 1;
+	 PetscOptionsGetInt(PETSC_NULL, "-epsnum", &user.epsnum, PETSC_NULL);
+	 
 	 PetscOptionsGetInt(PETSC_NULL, "-maxit", &maxit, PETSC_NULL);
 	 user.nx = 10;
 	 PetscOptionsGetInt(PETSC_NULL, "-nx", &user.nx, PETSC_NULL);
@@ -131,8 +135,8 @@ int main (int argc, char ** argv) {
 	 EPSSetOperators(user.eps, user.K, PETSC_NULL);
 	 EPSSetProblemType(user.eps, EPS_HEP);
 	 EPSGetST(user.eps, &st);
-	 EPSSetDimensions(user.eps, 1, 10);
-//	 EPSSetWhichEigenPair(user.eps, EPS_SMALLEST_MAGNITUDE);
+	 EPSSetDimensions(user.eps, user.epsnum, 5*user.epsnum);
+	 //	 EPSSetWhichEigenpairs(user.eps, EPS_SMALLEST_MAGNITUDE);
 	 
 	 STSetType(st, st_type);
 	 STSetShift(st, st_shift);
@@ -145,7 +149,8 @@ int main (int argc, char ** argv) {
 	 STSetFromOptions(st);
 	 EPSSetFromOptions(user.eps);
 	 
-    InitPhiRandom(user, phi);
+	 InitPhiRandom(user, phi);
+	 //    InitPhiQuarter(user, phi);
 //	 VecScale(phi, (PetscScalar) .1);
 
 	 sprintf(filename, "%s%.3d%s", phi_prfx, myrank, txtsfx);
@@ -313,7 +318,7 @@ PetscErrorCode ComputeLambdaU(AppCtx user, Vec phi, PetscScalar *lambda, Vec u){
 	 
 	 VecDuplicate(u, &ui);
 	 EPSGetConverged(user.eps, &nconv);
-	 EPSGetEigenpair(user.eps, nconv-1 , lambda, &eigi, u, ui);
+	 EPSGetEigenpair(user.eps, nconv-user.epsnum , lambda, &eigi, u, ui);
 	 VecNorm(u, NORM_2, &normu);
 	 normu = 1.0 / normu;
 	 VecScale(u, normu);
