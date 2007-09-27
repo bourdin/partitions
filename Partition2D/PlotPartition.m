@@ -21,30 +21,47 @@ for i=1:k,
     Phi_all = Phi_all + i * Phi(:,:,i);
 end
 
+linecolor          = 0.55*ones(1,3);
+%----------------------------------------------------------
+% les U
+try
 close(1);
+end
 pfigure(1);
 hold off;
-line([1 3*nx],        [ny+1, ny+1],     [1,1],  'LineWidth', 1, 'Color', [.75 .75 .75]);
+n                  = 3*nx;
+x                  = linspace(-1,2,n);
+y                  = linspace(-1,2,n);
+[X,Y]              = meshgrid(x,y);
 hold on;
-line([1 3*nx],        [2*ny+1, 2*ny+1], [1,1],  'LineWidth', 1, 'Color', [.75 .75 .75]);
-line([nx+1 nx+1],     [1, 2*ny],        [1,1],  'LineWidth', 1, 'Color', [.75 .75 .75]);
-line([2*nx+1 2*nx+1], [1, 3*ny],        [1,1],  'LineWidth', 1, 'Color', [.75 .75 .75]);
-surface([[U_all,U_all,U_all];[U_all,U_all,U_all];[U_all,U_all,U_all]]);
+surf(X,Y,[[U_all,U_all,U_all];[U_all,U_all,U_all];[U_all,U_all,U_all]]/max(abs(U_all(:))));
+line([0  0],       [-1 2],     [1 1],  'LineWidth', 3, 'Color', linecolor);
+line([1  1],       [-1 2],     [1 1],  'LineWidth', 3, 'Color', linecolor);
+line([-1 2],       [0  0],     [1 1],  'LineWidth', 3, 'Color', linecolor);
+line([-1 2],       [1  1],     [1 1],  'LineWidth', 3, 'Color', linecolor);
 title(strcat('U: iteration ',num2str(iter)));
-axis equal;
+axis equal;axis off
 shading interp;
 colorbar;
 
+ 
+%----------------------------------------------------------
+% Les Phi
+try
 close(2);
-pfigure(2);
-hold off;
-line([1 3*nx],        [ny+1, ny+1],     [k+1,k+1],  'LineWidth', 1, 'Color', [.75 .75 .75]);
-hold on;
-line([1 3*nx],        [2*ny+1, 2*ny+1], [k+1,k+1],  'LineWidth', 1, 'Color', [.75 .75 .75]);
-line([nx+1 nx+1],     [1, 3*ny],        [k+1,k+1],  'LineWidth', 1, 'Color', [.75 .75 .75]);
-line([2*nx+1 2*nx+1], [1, 3*ny],        [k+1,k+1],  'LineWidth', 1, 'Color', [.75 .75 .75]);
-surface([[Phi_all, Phi_all, Phi_all]; [Phi_all, Phi_all, Phi_all] ; [Phi_all, Phi_all, Phi_all]]);
+end
+pfigure(2)
+
+surf(X,Y,[[Phi_all, Phi_all, Phi_all]; [Phi_all, Phi_all, Phi_all] ; [Phi_all, Phi_all, Phi_all]]/max(abs(Phi_all(:))))
+view(2)
+hold on
+line([0  0],       [-1 2],     [1 1],  'LineWidth', 3, 'Color', linecolor);
+line([1  1],       [-1 2],     [1 1],  'LineWidth', 3, 'Color', linecolor);
+line([-1 2],       [0  0],     [1 1],  'LineWidth', 3, 'Color', linecolor);
+line([-1 2],       [1  1],     [1 1],  'LineWidth', 3, 'Color', linecolor);
 title(strcat('Phi: iteration ',num2str(iter)));
-axis equal;
+axis equal;axis off
 shading interp;
 colorbar;
+daspect([ 1 1  1]);
+
