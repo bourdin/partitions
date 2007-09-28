@@ -33,12 +33,16 @@ extern PetscErrorCode VecView_RAW(Vec x, const char filename[]);
 extern PetscErrorCode VecView_VTKASCII(Vec x, const char filename[]);
 extern PetscErrorCode SimplexProjection(AppCtx user, Vec x);
 
+      
+
 
 int main (int argc, char ** argv) {
 	 PetscErrorCode	ierr;
 	 AppCtx				user;	  
 	 Vec					phi;
-	 Vec					u, G, psi, vec_one;
+	 Vec					u, G, Gproj, psi, vec_one, phi2, phi2sum;
+	 PetscScalar      *phi2_array, *phi2sum_array;
+	 
 	 PetscScalar		lambda, F, Fold;
 	 PetscScalar		stepmax = 1.0e+6;
 	 PetscScalar		stepmin;
@@ -51,6 +55,7 @@ int main (int argc, char ** argv) {
 	 const char			vtksfx[] = ".vtk";
 	 PetscScalar      *phi_array, *psi_array;
     PetscScalar      muinit, mufinal;
+    PetscScalar      GNorm;
 		  
 	 int				   N, i, it;
 	 PetscInt         maxit = 1000;
@@ -87,6 +92,8 @@ int main (int argc, char ** argv) {
 	 PetscOptionsGetInt(PETSC_NULL, "-epsnum", &user.epsnum, PETSC_NULL);
 	 
 	 PetscOptionsGetInt(PETSC_NULL, "-maxit", &maxit, PETSC_NULL);
+	 PetscOptionsGetScalar(PETSC_NULL, "-tol", &tol, PETSC_NULL);
+
 	 user.nx = 10;
 	 PetscOptionsGetInt(PETSC_NULL, "-nx", &user.nx, PETSC_NULL);
 	 PetscOptionsGetInt(PETSC_NULL, "-ny", &user.ny, &flag);	 
@@ -131,6 +138,9 @@ int main (int argc, char ** argv) {
 	 VecDuplicate(phi, &G);
  	 VecDuplicate(phi, &psi);
     VecDuplicate(phi, &vec_one);
+    VecDuplicate(phi, &phi2);
+    if (myrank==0) VecDuplicate(phi, &phi2sum);
+    
     VecSet(vec_one, (PetscScalar) 1.0);
 	 
 	 /* Create the eigensolver context */
@@ -165,6 +175,7 @@ int main (int argc, char ** argv) {
 	 */
 	 
 	 InitPhiRandom(user, phi);
+	 VecScale(phi, (PetscScalar) 1.0 / (PetscScalar) numprocs);
 	 SimplexProjection(user, phi);
 
 	 sprintf(filename, "%s%.3d%s", phi_prfx, myrank, txtsfx);
@@ -188,35 +199,54 @@ int main (int argc, char ** argv) {
     PetscViewerFlush(viewer);
     PetscViewerASCIIPrintf(viewer, "\n", it);
 
-	 while ( it < maxit ){ 
+	 do { 
 		it++;
-		user.mu = PetscMin(muinit + (PetscScalar) (2*it) / (PetscScalar) maxit * (mufinal - muinit), mufinal);
 		
+		// Update mu linearly between muinit and mufinal in maxit/2 steps, starting from iteration 0
+		//user.mu = PetscMin(muinit + (PetscScalar) (2*it) / (PetscScalar) maxit * (mufinal - muinit), mufinal);
+				
 		Fold = F;
 		F = 0.0;
 		PetscPrintf(PETSC_COMM_WORLD, "Iteration %d:\n", it);
+
+      // Compute the gradient of the objective function w.r.t. u
 		ComputeG(user, G, u);
+
+      // Compute Projection(phi + G)		
+      VecCopy(phi, phi2);
+      VecAXPY(phi2, (PetscScalar) 1.0, G);
+		SimplexProjection(user, phi2);
+      VecAXPY(phi2, (PetscScalar) -1.0, phi);
+      
+      // Compute L2(<G^k,phi2^k>) 
+      VecPointwiseMult(phi2, phi2, G);
+
+      VecGetArray(phi2, &phi2_array);
+      if (myrank == 0) VecGetArray(phi2sum, &phi2sum_array);
+      MPI_Reduce(phi2_array, phi2sum_array, user.nx * user.ny, MPIU_SCALAR, MPI_SUM, 0, PETSC_COMM_WORLD);
+      VecRestoreArray(phi2, &phi2_array);
+      if (myrank == 0) {
+         VecRestoreArray(phi2sum, &phi2sum_array);
+         VecNorm(phi2sum, NORM_2, &error);
+      }
+      MPI_Bcast(&error, 1, MPIU_SCALAR, 0, PETSC_COMM_WORLD);
+      
+      
+		// Update phi
 		VecAXPY(phi, user.step, G);
 
-
-		  // truncation
-      /*
-      VecGetArray(psi, &psi_array);
-      VecGetArray(phi, &phi_array);
-      MPI_Allreduce(phi_array, psi_array, user.nx * user.ny, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
-      VecRestoreArray(phi, &phi_array);
-      VecRestoreArray(psi, &psi_array);
-      VecPointwiseMax(psi, psi, vec_one);
-		VecPointwiseDivide(phi, phi, psi);
-		*/
-
+      // Project phi onto the simplex \sum_k \phi^k_i=1 for i = 0-nx*ny-1
 		SimplexProjection(user, phi);
 		
-		F = 0.0;
+      //Compute the eigenvalues u associated to the new phi
 		ComputeLambdaU(user, phi, &lambda, u);
+		
+		//compute F= \sum_k lambda^k_epsnum
       MPI_Allreduce(&lambda, &F, 1, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
 
 
+      // Update the step
+/*
 		if (F<=Fold) {
          user.step = user.step * 1.2;
 			user.step = PetscMin(user.step, stepmax);
@@ -225,25 +255,30 @@ int main (int argc, char ** argv) {
 		   user.step = user.step / 2.0;
          user.step = PetscMax(user.step, stepmin);
       }
-
-
-         
-		error = (Fold - F) / F;
+*/
+      //Display some stuff
 		PetscPrintf(PETSC_COMM_WORLD, "F = %e, step = %e, error = %e, mu = %e\n\n", F, user.step, error, user.mu);
 
+      //Save the same stuff in "Partition.log"
       PetscViewerASCIIPrintf(viewer, "%d   %e   ", it, F);
       PetscViewerASCIISynchronizedPrintf(viewer, "%e   ", lambda);
       PetscViewerFlush(viewer);
-      PetscViewerASCIIPrintf(viewer, "\n", it);
+      PetscViewerASCIIPrintf(viewer, "%e \n", error, it);
       
       
+      
+      // Saves the results in matlab or vtk format
 		  if (it%10 == 0){
- 					 sprintf(filename, "%s%.3d-%.5d%s", u_prfx, myrank, it,txtsfx);
-//					 sprintf(filename, "%s%.3d%s", u_prfx, myrank, txtsfx);
+		          // Save into a new file
+ 					 sprintf(filename, "%s%.3d-%.5d%s", u_prfx, myrank, it, txtsfx);
+ 					 
+ 					 // Reuse the same file over and over
+                // sprintf(filename, "%s%.3d%s", u_prfx, myrank, txtsfx);
 					 PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
 					 VecView_TXT(u, filename);
 
 					/*
+					 // Save in VTK format
 					 sprintf(filename, "%s%.3d-%.5d%s", u_prfx, myrank, it, vtksfx);
 					 PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
 					 VecView_VTKASCII(u, filename);
@@ -260,7 +295,11 @@ int main (int argc, char ** argv) {
 					 VecView_VTKASCII(phi, filename);
 					 */
 		  }
-	 }
+	 } while ( ( it < maxit ) && (error > tol) );
+	 
+	 // Be nice and deallocate
+	 VecDestroy(phi2);
+	 VecDestroy(phi2sum);
 	 VecDestroy(phi);
 	 VecDestroy(psi);
 	 VecDestroy(u);
@@ -268,6 +307,8 @@ int main (int argc, char ** argv) {
 	 MatDestroy(user.K);
 	 DADestroy(user.da);	 
 	 EPSDestroy(user.eps);
+	 
+	 // Same informations on the run (including command line options)
 	 PetscLogPrintSummary(MPI_COMM_WORLD,"petsc_log_summary.log");		
     PetscViewerDestroy(viewer);
 
@@ -563,6 +604,7 @@ PetscErrorCode SimplexProjection(AppCtx user, Vec phi)
       MPI_Allreduce(phi_array, psi_array, user.nx * user.ny, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
       MPI_Allreduce(I, n, user.nx * user.ny, MPI_INT, MPI_SUM, PETSC_COMM_WORLD);
       for (i=0; i<user.nx*user.ny; i++){
+//      if (psi_array[i]>1.0){
          if (numprocs - n[i]) phi_array[i] = phi_array[i]- (PetscScalar) (1-I[i]) * (psi_array[i]-1.0) / (PetscScalar) (numprocs - n[i]);     
       }
       for (i=0; i<user.nx*user.ny; i++){
@@ -571,6 +613,7 @@ PetscErrorCode SimplexProjection(AppCtx user, Vec phi)
             phi_array[i]= (PetscScalar) 0.0;
          }
       }
+//      }
    }
    VecRestoreArray(phi, &phi_array);
    VecRestoreArray(psi, &psi_array);   
@@ -582,12 +625,13 @@ PetscErrorCode SimplexProjection(AppCtx user, Vec phi)
 }
       
       
-      
-      
-      
-      
-      
-      
+//PetscErrorCode Scalprod(AppCtx user, Vec phi,Vec G)
+//{      
+//        
+//      
+//      
+//      
+//}      
       
       
       
