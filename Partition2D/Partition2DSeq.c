@@ -198,10 +198,6 @@ int main (int argc, char ** argv) {
     PetscViewerASCIISynchronizedPrintf(viewer, "%e   ", lambda);
     PetscViewerFlush(viewer);
     PetscViewerASCIIPrintf(viewer, "\n", it);
-    
-    ComputeK(user, phi);
-	 EPSSetOperators(user.eps, user.K, PETSC_NULL);
-
 
 	 do { 
 		it++;
@@ -234,7 +230,6 @@ int main (int argc, char ** argv) {
          VecNorm(phi2sum, NORM_2, &error);
       }
       MPI_Bcast(&error, 1, MPIU_SCALAR, 0, PETSC_COMM_WORLD);
-      
       
 		// Update phi
 		VecAXPY(phi, user.step, G);
@@ -272,7 +267,7 @@ int main (int argc, char ** argv) {
       
       
       // Saves the results in matlab or vtk format
-		  if (it%10 == 10){
+		  if (it%10 == 0){
 		          // Save into a new file
  					 sprintf(filename, "%s%.3d-%.5d%s", u_prfx, myrank, it, txtsfx);
  					 
@@ -486,7 +481,6 @@ PetscErrorCode VecView_TXT(Vec x, const char filename[]){
 	 }
 	 VecRestoreArray(io, &io_array);		
 	 VecDestroy(io);
-	 DADestroy(da);
 	 return 0;
 }
 
@@ -520,7 +514,6 @@ PetscErrorCode VecView_RAW(Vec x, const char filename[]){
 		  VecView(io,viewer);
 		  PetscViewerDestroy(viewer);
 	 VecDestroy(io);
-	 DADestroy(da);
 	 return 0;
 }
 
