@@ -139,8 +139,9 @@ int main (int argc, char ** argv) {
  	 VecDuplicate(phi, &psi);
     VecDuplicate(phi, &vec_one);
     VecDuplicate(phi, &phi2);
-    if (myrank==0) VecDuplicate(phi, &phi2sum);
-    
+//    if (myrank==0) VecDuplicate(phi, &phi2sum);
+    VecDuplicate(phi, &phi2sum);
+  
     VecSet(vec_one, (PetscScalar) 1.0);
 	 
 	 /* Create the eigensolver context */
@@ -221,6 +222,7 @@ int main (int argc, char ** argv) {
       // Compute L2(<G^k,phi2^k>) 
       VecPointwiseMult(phi2, phi2, G);
 
+/*
       VecGetArray(phi2, &phi2_array);
       if (myrank == 0) VecGetArray(phi2sum, &phi2sum_array);
       MPI_Reduce(phi2_array, phi2sum_array, user.nx * user.ny, MPIU_SCALAR, MPI_SUM, 0, PETSC_COMM_WORLD);
@@ -230,6 +232,13 @@ int main (int argc, char ** argv) {
          VecNorm(phi2sum, NORM_2, &error);
       }
       MPI_Bcast(&error, 1, MPIU_SCALAR, 0, PETSC_COMM_WORLD);
+*/
+      VecGetArray(phi2, &phi2_array);
+      VecGetArray(phi2sum, &phi2sum_array);
+      MPI_Allreduce(phi2_array, phi2sum_array, user.nx * user.ny, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
+      VecRestoreArray(phi2, &phi2_array);
+      VecRestoreArray(phi2sum, &phi2sum_array);
+      VecNorm(phi2sum, NORM_2, &error);
       
 		// Update phi
 		VecAXPY(phi, user.step, G);
@@ -377,6 +386,7 @@ PetscErrorCode ComputeLambdaU(AppCtx user, Vec phi, PetscScalar *lambda, Vec u){
 	 
 	 VecDuplicate(u, &ui);
 	 EPSGetConverged(user.eps, &nconv);
+	 
 	 EPSGetEigenpair(user.eps, nconv-user.epsnum , lambda, &eigi, u, ui);
 	 VecNorm(u, NORM_2, &normu);
 	 normu = 1.0 / normu;
