@@ -157,8 +157,10 @@ int main (int argc, char ** argv) {
 	 
 	 STGetKSP(st, &eps_ksp);
 	 KSPGetPC(eps_ksp, &eps_pc);
-	 PCSetType(eps_pc, PCCHOLESKY);
-	 KSPSetType(eps_ksp, KSPPREONLY);
+	 //	 PCSetType(eps_pc, PCCHOLESKY);
+	 //	 KSPSetType(eps_ksp, KSPPREONLY);
+	 PCSetType(eps_pc, PCICC);
+	 KSPSetType(eps_ksp, KSPCG);
 
 	 STSetFromOptions(st);
 	 EPSSetFromOptions(user.eps);
@@ -376,7 +378,7 @@ PetscErrorCode ComputeLambdaU(AppCtx user, Vec phi, PetscScalar *lambda, Vec u){
 
 	 
 	 ComputeK(user, phi);
-	 EPSSetOperators(user.eps, user.K, PETSC_NULL);
+	 //	 EPSSetOperators(user.eps, user.K, PETSC_NULL);
 	 PetscGetTime(&eps_ts);
 	 EPSSolve(user.eps);
 	 PetscGetTime(&eps_tf);
