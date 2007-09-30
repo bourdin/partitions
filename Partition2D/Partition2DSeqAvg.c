@@ -21,6 +21,7 @@ typedef struct {
 	 EPS				eps;	  /* Eigenvalue solver context */
 	 Mat				K;		  /* Matrix for the Laplacian */
 	 PetscInt      epsnum; /* which eigenvalues are we optimizing */
+  PetscScalar      epstol; /* thresold below which eigenvalues are considered equal */
 } AppCtx;
 
 extern PetscErrorCode ComputeK(AppCtx user, Vec phi);
@@ -56,6 +57,7 @@ int main (int argc, char ** argv) {
 	 PetscScalar      *phi_array, *psi_array;
     PetscScalar      muinit, mufinal;
     PetscScalar      GNorm;
+
 		  
 	 int				   N, i, it;
 	 PetscInt         maxit = 1000;
@@ -88,6 +90,8 @@ int main (int argc, char ** argv) {
 	 
 	 PetscOptionsGetInt(PETSC_NULL, "-maxit", &maxit, PETSC_NULL);
 	 PetscOptionsGetScalar(PETSC_NULL, "-tol", &tol, PETSC_NULL);
+  user.epstol = .05;
+	 PetscOptionsGetScalar(PETSC_NULL, "-epstol", &user.epstol, PETSC_NULL);
 
 	 user.nx = 10;
 	 PetscOptionsGetInt(PETSC_NULL, "-nx", &user.nx, PETSC_NULL);
@@ -146,7 +150,7 @@ int main (int argc, char ** argv) {
 	 EPSSetOperators(user.eps, user.K, PETSC_NULL);
 	 EPSSetProblemType(user.eps, EPS_HEP);
 	 EPSGetST(user.eps, &st);
-	 EPSSetDimensions(user.eps, user.epsnum, 5*user.epsnum);
+	 EPSSetDimensions(user.eps, 2*user.epsnum, 10*user.epsnum);
 	 
 	 STSetType(st, st_type);
 	 STSetShift(st, st_shift);
@@ -353,9 +357,10 @@ PetscErrorCode ComputeK(AppCtx user, Vec phi)
 
 PetscErrorCode ComputeLambdaU(AppCtx user, Vec phi, PetscScalar *lambda, Vec u){
 	 PetscLogDouble	eps_ts, eps_tf, eps_t;
-	 int					its;
+	 int					its, i;
 	 Vec					ui;
-	 PetscScalar		eigi, normu;
+	 Vec                                    utmp;
+	 PetscScalar		eigi, normu, lambdatmp;
 	 int					nconv;
 	 PetscInt         myrank;
 	 
@@ -363,7 +368,6 @@ PetscErrorCode ComputeLambdaU(AppCtx user, Vec phi, PetscScalar *lambda, Vec u){
 
 	 
 	 ComputeK(user, phi);
-	 //	 EPSSetOperators(user.eps, user.K, PETSC_NULL);
 	 PetscGetTime(&eps_ts);
 	 EPSSolve(user.eps);
 	 PetscGetTime(&eps_tf);
@@ -372,14 +376,30 @@ PetscErrorCode ComputeLambdaU(AppCtx user, Vec phi, PetscScalar *lambda, Vec u){
 
 	 
 	 VecDuplicate(u, &ui);
+	 VecDuplicate(u, &utmp);
 	 EPSGetConverged(user.eps, &nconv);
 	 
 	 EPSGetEigenpair(user.eps, nconv-user.epsnum , lambda, &eigi, u, ui);
 	 VecNorm(u, NORM_2, &normu);
 	 normu = 1.0 / normu;
 	 VecScale(u, normu);
+
+	 for (i=0; i<nconv; i++){
+	   EPSGetEigenpair(user.eps, nconv-i-1 , &lambdatmp, &eigi, utmp, ui);
+	   if ( (i != user.epsnum) && ( fabs((*lambda - lambdatmp) / *lambda) < user.epstol) ){
+	     PetscPrintf (PETSC_COMM_SELF, "*** Eigenvalue %d is close enough (%e %e)\n", i, lambdatmp, *lambda);
+	     VecNorm(utmp, NORM_2, &normu);
+	     normu = 1.0 / normu;
+	     VecScale(utmp, normu);
+	     VecAXPY(u, (PetscScalar) 1.0, utmp);
+	   }
+	 }
+	 VecNorm(u, NORM_2, &normu);
+	 normu = 1.0 / normu;
+	 VecScale(u, normu);
 	 
 	 VecDestroy(ui);
+	 VecDestroy(utmp);
 		  
 	 *lambda = *lambda * (PetscReal)(user.nx-1) * (PetscReal)(user.ny-1) / 2.0; 
 	 PetscSynchronizedPrintf(PETSC_COMM_WORLD, "        lambda[%d] = %e    EPSSolve converged in %f s for %d iterations\n", myrank, *lambda, eps_t, its);
