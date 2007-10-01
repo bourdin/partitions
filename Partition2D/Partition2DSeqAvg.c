@@ -386,7 +386,7 @@ PetscErrorCode ComputeLambdaU(AppCtx user, Vec phi, PetscScalar *lambda, Vec u){
 
 	 for (i=0; i<nconv; i++){
 	   EPSGetEigenpair(user.eps, nconv-i-1 , &lambdatmp, &eigi, utmp, ui);
-	   if ( (i != user.epsnum) && ( fabs((*lambda - lambdatmp) / *lambda) < user.epstol) ){
+	   if ( (i != user.epsnum-1) && ( fabs((*lambda - lambdatmp) / *lambda) < user.epstol) ){
 	     PetscPrintf (PETSC_COMM_SELF, "*** Eigenvalue %d is close enough (%e %e)\n", i, lambdatmp, *lambda);
 	     VecNorm(utmp, NORM_2, &normu);
 	     normu = 1.0 / normu;
