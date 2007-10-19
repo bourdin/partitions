@@ -44,8 +44,8 @@ int main (int argc, char ** argv) {
 	 PetscScalar      *phi2_array, *phi2sum_array;
 	 
 	 PetscScalar		lambda, F, Fold;
-	 PetscScalar		stepmax = 1.0e+6;
-	 PetscScalar		stepmin;
+	 PetscScalar		stepmax = 1.0e+5;
+	 PetscScalar		stepmin = 1.0e-5;
 	 PetscScalar		error, tol = 1.0e-3;
 	 const char			u_prfx[] = "Partition_U-";
 	 const char			phi_prfx[] = "Partition_Phi-";
@@ -135,7 +135,7 @@ int main (int argc, char ** argv) {
  	 VecDuplicate(phi, &psi);
     VecDuplicate(phi, &vec_one);
     VecDuplicate(phi, &phi2);
-//    if (myrank==0) VecDuplicate(phi, &phi2sum);
+
     VecDuplicate(phi, &phi2sum);
   
     VecSet(vec_one, (PetscScalar) 1.0);
@@ -153,8 +153,7 @@ int main (int argc, char ** argv) {
 	 
 	 STGetKSP(st, &eps_ksp);
 	 KSPGetPC(eps_ksp, &eps_pc);
-	 //	 PCSetType(eps_pc, PCCHOLESKY);
-	 //	 KSPSetType(eps_ksp, KSPPREONLY);
+
 	 PCSetType(eps_pc, PCICC);
 	 KSPSetType(eps_ksp, KSPCG);
 
@@ -241,7 +240,7 @@ int main (int argc, char ** argv) {
 
 
       // Update the step
-/*
+
 		if (F<=Fold) {
          user.step = user.step * 1.2;
 			user.step = PetscMin(user.step, stepmax);
@@ -250,7 +249,7 @@ int main (int argc, char ** argv) {
 		   user.step = user.step / 2.0;
          user.step = PetscMax(user.step, stepmin);
       }
-*/
+
       //Display some stuff
 		PetscPrintf(PETSC_COMM_WORLD, "F = %e, step = %e, error = %e, mu = %e\n\n", F, user.step, error, user.mu);
 
@@ -265,32 +264,45 @@ int main (int argc, char ** argv) {
       // Saves the results in matlab or vtk format
 		  if (it%10 == 0){
 		          // Save into a new file
- 					 sprintf(filename, "%s%.3d-%.5d%s", u_prfx, myrank, it, txtsfx);
+		    //sprintf(filename, "%s%.3d-%.5d%s", u_prfx, myrank, it, txtsfx);
  					 
  					 // Reuse the same file over and over
-                // sprintf(filename, "%s%.3d%s", u_prfx, myrank, txtsfx);
+                 sprintf(filename, "%s%.3d%s", u_prfx, myrank, txtsfx);
 					 PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
 					 VecView_TXT(u, filename);
 
-					/*
+					
 					 // Save in VTK format
-					 sprintf(filename, "%s%.3d-%.5d%s", u_prfx, myrank, it, vtksfx);
+					 sprintf(filename, "%s%.3d%s", u_prfx, myrank, vtksfx);
 					 PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
 					 VecView_VTKASCII(u, filename);
-					*/
+					
 
- 					 sprintf(filename, "%s%.3d-%.5d%s", phi_prfx, myrank, it, txtsfx);
-//					 sprintf(filename, "%s%.3d%s", phi_prfx, myrank, txtsfx);
+					 // 					 sprintf(filename, "%s%.3d-%.5d%s", phi_prfx, myrank, it, txtsfx);
+					 sprintf(filename, "%s%.3d%s", phi_prfx, myrank, txtsfx);
 					 PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
 					 VecView_TXT(phi, filename);
 
-					/*
-					 sprintf(filename, "%s%.3d-%.5d%s", phi_prfx, myrank, it, vtksfx);
+					
+					 sprintf(filename, "%s%.3d%s", phi_prfx, myrank, vtksfx);
 					 PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
 					 VecView_VTKASCII(phi, filename);
-					 */
+					 
 		  }
-	 } while ( ( it < maxit ) && (error > tol) );
+	 } while ( (it < 20 ) || ( ( it < maxit ) && (error > tol) ) );
+
+	 sprintf(filename, "%s%.3d%s", u_prfx, myrank, vtksfx);
+	 PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
+	 VecView_VTKASCII(u, filename);
+	 sprintf(filename, "%s%.3d%s", u_prfx, myrank, txtsfx);
+	 PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
+	 VecView_TXT(u, filename);
+	 sprintf(filename, "%s%.3d%s", phi_prfx, myrank, vtksfx);
+	 PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
+	 VecView_VTKASCII(phi, filename);
+	 sprintf(filename, "%s%.3d%s", phi_prfx, myrank, txtsfx);
+	 PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
+	 VecView_TXT(phi, filename);
 	 
 	 // Be nice and deallocate
 	 VecDestroy(phi2);
@@ -316,7 +328,7 @@ PetscErrorCode ComputeK(AppCtx user, Vec phi)
 	 Mat				 K	 = user.K;
 	 DA				 da = user.da;
 	 PetscErrorCode ierr;
-	 PetscInt		 i, j, mx, my, xm, ym, xs, ys;
+	 PetscInt		 i, j, xm, ym, xs, ys;
 	 PetscScalar	 v[5],Hx,Hy,HxdHy,HydHx;
 	 MatStencil		 row,col[5];
 	 PetscScalar	 **local_phi;
@@ -363,7 +375,7 @@ PetscErrorCode ComputeLambdaU(AppCtx user, Vec phi, PetscScalar *lambda, Vec u){
 
 	 
 	 ComputeK(user, phi);
-	 //	 EPSSetOperators(user.eps, user.K, PETSC_NULL);
+	 EPSSetOperators(user.eps, user.K, PETSC_NULL);
 	 PetscGetTime(&eps_ts);
 	 EPSSolve(user.eps);
 	 PetscGetTime(&eps_tf);
@@ -433,52 +445,57 @@ extern PetscErrorCode ComputeG(AppCtx user, Vec G, Vec u){
 }
 
 PetscErrorCode VecView_TXT(Vec x, const char filename[]){
-	 Vec				natural, io;
-	 VecScatter		tozero;
-	 PetscMPIInt	rank, size;
-	 int				N;
-	 PetscScalar	*io_array;
-	 DA				da;
-	 PetscViewer	viewer;
-	 int				i, j, mx, my;
-	 MPI_Comm      comm;
+	 Vec				     natural, io;
+	 VecScatter		     tozero;
+	 PetscMPIInt	     rank, size;
+	 int				     N;
+	 PetscScalar	     *io_array;
+	 DA				     da;
+	 PetscViewer	     viewer;
+	 int				     i, j, k, mx, my, mz;
+	 MPI_Comm           comm;
+	 PetscErrorCode     ierr;
+
 	 
-    PetscObjectGetComm((PetscObject) x, &comm);
-    MPI_Comm_rank(comm, &rank);
-    MPI_Comm_size(comm, &size);
+    ierr = PetscObjectGetComm((PetscObject) x, &comm); CHKERRQ(ierr);
+    ierr = MPI_Comm_rank(comm, &rank); CHKERRQ(ierr);
+    ierr = MPI_Comm_size(comm, &size); CHKERRQ(ierr);
 
-	 VecGetSize(x, &N);
+	 ierr = VecGetSize(x, &N); CHKERRQ(ierr);
 
-	 PetscObjectQuery((PetscObject) x, "DA", (PetscObject *) &da);
+	 ierr = PetscObjectQuery((PetscObject) x, "DA", (PetscObject *) &da); CHKERRQ(ierr);
 	 if (!da) SETERRQ(PETSC_ERR_ARG_WRONG,"Vector not generated from a DA");
-	 DAGetInfo(da, 0, &mx, &my, 0,0,0,0, 0,0,0,0);
+	 ierr = DAGetInfo(da, 0, &mx, &my, &mz,0,0,0, 0,0,0,0); CHKERRQ(ierr);
 
-	 DACreateNaturalVector(da, &natural);
-	 DAGlobalToNaturalBegin(da, x, INSERT_VALUES, natural);
-	 DAGlobalToNaturalEnd(da, x, INSERT_VALUES, natural);
+	 ierr = DACreateNaturalVector(da, &natural); CHKERRQ(ierr);
+	 ierr = DAGlobalToNaturalBegin(da, x, INSERT_VALUES, natural); CHKERRQ(ierr);
+	 ierr = DAGlobalToNaturalEnd(da, x, INSERT_VALUES, natural); CHKERRQ(ierr);
 	 
-	 VecScatterCreateToZero(natural, &tozero, &io);
-	 VecScatterBegin(tozero, natural, io, INSERT_VALUES, SCATTER_FORWARD);
-	 VecScatterEnd(tozero, natural, io, INSERT_VALUES, SCATTER_FORWARD);
-	 VecScatterDestroy(tozero);
-	 VecDestroy(natural);
+	 ierr = VecScatterCreateToZero(natural, &tozero, &io); CHKERRQ(ierr);
+	 ierr = VecScatterBegin(tozero, natural, io, INSERT_VALUES, SCATTER_FORWARD); CHKERRQ(ierr);
+	 ierr = VecScatterEnd(tozero, natural, io, INSERT_VALUES, SCATTER_FORWARD); CHKERRQ(ierr);
+	 ierr = VecScatterDestroy(tozero); CHKERRQ(ierr);
+	 ierr = VecDestroy(natural); CHKERRQ(ierr);
 
-	 VecGetArray(io, &io_array);	  
+	 ierr = VecGetArray(io, &io_array); CHKERRQ(ierr);	  
 
-	 if (rank ==	 0){
-		  PetscViewerASCIIOpen(PETSC_COMM_SELF, filename, &viewer);
-		  for (j=0; j<my; j++){
-				for(i=0; i<mx; i++){
-					 PetscViewerASCIIPrintf(viewer, "%G	  ", PetscRealPart(io_array[j*mx+i]));
-				}
-				PetscViewerASCIIPrintf(viewer, "\n");
-		  }
-		  PetscViewerFlush(viewer);
-		  PetscViewerDestroy(viewer);
+	 if (!rank){
+		  ierr = PetscViewerASCIIOpen(PETSC_COMM_SELF, filename, &viewer); CHKERRQ(ierr);
+  		  for (k=0; k<mz; k++){
+           for(i=0; i<mx; i++){
+      		  for (j=0; j<my; j++){
+   					 ierr = PetscViewerASCIIPrintf(viewer, "%G	  ", PetscRealPart(io_array[k*my*mx + j*mx + i])); CHKERRQ(ierr);
+   				}
+   				ierr = PetscViewerASCIIPrintf(viewer, "\n"); CHKERRQ(ierr);
+   		  }
+   		  ierr =  PetscViewerASCIIPrintf(viewer, "\n"); CHKERRQ(ierr);
+        }
+		  ierr = PetscViewerFlush(viewer); CHKERRQ(ierr);
+		  ierr = PetscViewerDestroy(viewer); CHKERRQ(ierr);
 	 }
-	 VecRestoreArray(io, &io_array);		
-	 VecDestroy(io);
-	 return 0;
+	 ierr = VecRestoreArray(io, &io_array); CHKERRQ(ierr);		
+	 ierr = VecDestroy(io); CHKERRQ(ierr);
+	 PetscFunctionReturn(0);
 }
 
 PetscErrorCode VecView_RAW(Vec x, const char filename[]){
@@ -516,19 +533,19 @@ PetscErrorCode VecView_RAW(Vec x, const char filename[]){
 
 PetscErrorCode VecView_VTKASCII(Vec x, const char filename[])
 {
-  MPI_Comm				comm;
-  DA						da;
-  Vec						natural, master;
-  PetscViewer			viewer;
-  PetscScalar		  *array, *values;
-  PetscInt				n, N, maxn, mx, my, mz, dof;
-  PetscInt				xs, xm, ys, ym;
-  PetscInt				i, p;
-  MPI_Status			status;
-  PetscMPIInt			rank, size, tag;
-  PetscErrorCode		ierr;
-  VecScatter			ScatterToZero;
-  const char					*name;
+  MPI_Comm           comm;
+  DA                 da;
+  Vec                natural, master;
+  PetscViewer        viewer;
+  PetscScalar        *array, *values;
+  PetscInt           n, N, maxn, mx, my, mz, dof;
+  PetscInt           xs, xm, ys, ym;
+  PetscInt           i, p;
+  MPI_Status         status;
+  PetscMPIInt        rank, size, tag;
+  PetscErrorCode     ierr;
+  VecScatter         ScatterToZero;
+  const char         *name;
 
   PetscFunctionBegin;
   ierr = PetscObjectGetComm((PetscObject) x, &comm);CHKERRQ(ierr);
@@ -554,25 +571,26 @@ PetscErrorCode VecView_VTKASCII(Vec x, const char filename[])
   ierr = VecScatterEnd(ScatterToZero,natural,master,INSERT_VALUES,SCATTER_FORWARD);CHKERRQ(ierr);
 
   if (!rank) {
-	 ierr = PetscViewerASCIIOpen(PETSC_COMM_SELF, filename, &viewer);CHKERRQ(ierr);
-	 ierr = PetscViewerASCIIPrintf(viewer, "# vtk DataFile Version 2.0\n");CHKERRQ(ierr);
-	 ierr = PetscViewerASCIIPrintf(viewer, "%s\n",name);CHKERRQ(ierr);
-	 ierr = PetscViewerASCIIPrintf(viewer, "ASCII\n");CHKERRQ(ierr);
-	 
-	 /* Todo: get coordinates of nodes */
-	 ierr = PetscViewerASCIIPrintf(viewer, "DATASET STRUCTURED_POINTS\n");CHKERRQ(ierr);
-	 ierr = PetscViewerASCIIPrintf(viewer, "DIMENSIONS %d %d %d\n", mx, my, mz);CHKERRQ(ierr);
-	 ierr = PetscViewerASCIIPrintf(viewer, "POINT_DATA %d\n", N);CHKERRQ(ierr);
-	 ierr = PetscViewerASCIIPrintf(viewer, "SCALARS VecView_VTK float 1\n");CHKERRQ(ierr);
-	 ierr = PetscViewerASCIIPrintf(viewer, "LOOKUP_TABLE default\n");CHKERRQ(ierr);
-	 
-	 ierr = VecView(master, viewer);CHKERRQ(ierr);
-	 ierr = PetscViewerFlush(viewer);CHKERRQ(ierr);
-	 ierr = PetscViewerDestroy(viewer);CHKERRQ(ierr);
+    ierr = PetscViewerASCIIOpen(PETSC_COMM_SELF, filename, &viewer);CHKERRQ(ierr);
+    ierr = PetscViewerASCIIPrintf(viewer, "# vtk DataFile Version 2.0\n");CHKERRQ(ierr);
+    ierr = PetscViewerASCIIPrintf(viewer, "%s\n",name);CHKERRQ(ierr);
+    ierr = PetscViewerASCIIPrintf(viewer, "ASCII\n");CHKERRQ(ierr);
+    
+    /* Todo: get coordinates of nodes */
+    ierr = PetscViewerASCIIPrintf(viewer, "DATASET STRUCTURED_POINTS\n");CHKERRQ(ierr);
+    ierr = PetscViewerASCIIPrintf(viewer, "DIMENSIONS %d %d %d\n", mx, my, mz);CHKERRQ(ierr);
+    ierr = PetscViewerASCIIPrintf(viewer, "POINT_DATA %d\n", N);CHKERRQ(ierr);
+    ierr = PetscViewerASCIIPrintf(viewer, "SCALARS VecView_VTK float 1\n");CHKERRQ(ierr);
+    ierr = PetscViewerASCIIPrintf(viewer, "LOOKUP_TABLE default\n");CHKERRQ(ierr);
+    
+    ierr = VecView(master, viewer);CHKERRQ(ierr);
+    ierr = PetscViewerFlush(viewer);CHKERRQ(ierr);
+    ierr = PetscViewerDestroy(viewer);CHKERRQ(ierr);
   }  
 
   PetscFunctionReturn(0);
 }
+
 
 PetscErrorCode SimplexProjection(AppCtx user, Vec phi)
 {
