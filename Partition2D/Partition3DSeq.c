@@ -237,17 +237,17 @@ int main (int argc, char ** argv) {
       //compute F= \sum_k lambda^k_epsnum
       MPI_Allreduce(&lambda, &F, 1, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
       
-/*      
+      
       // Update the step
-      if (F<=Fold) {
+      if ( (F-Fold)/F < -1.0e-2) {
          user.step = user.step * 1.2;
          user.step = PetscMin(user.step, stepmax);
       }
-      else {
-         user.step = user.step / 2.0;
+      else if  ( (F-Fold)/F > 1.0e-2) {
+         user.step = user.step / 1.2;
          user.step = PetscMax(user.step, stepmin);
       }
-*/      
+      
       //Display some stuff
       PetscPrintf(PETSC_COMM_WORLD, "F = %e, step = %e, error = %e, mu = %e\n\n", F, user.step, error, user.mu);
       
