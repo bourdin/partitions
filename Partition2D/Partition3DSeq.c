@@ -31,50 +31,54 @@ extern PetscErrorCode InitPhiRandom(AppCtx user, Vec phi);
 extern PetscErrorCode VecView_TXT(Vec x, const char filename[]);
 extern PetscErrorCode VecView_RAW(Vec x, const char filename[]);
 extern PetscErrorCode VecView_VTKASCII(Vec x, const char filename[]);
+extern PetscErrorCode DAView_GEOASCII(DA da, const char filename []);
+extern PetscErrorCode VecView_EnsightASCII(Vec x, const char filename[]);
 extern PetscErrorCode SimplexProjection(AppCtx user, Vec x);
 
       
 
 
 int main (int argc, char ** argv) {
-   PetscErrorCode	ierr;
-   AppCtx				user;	  
-   Vec					phi;
-   Vec					u, G, Gproj, psi, vec_one, phi2, phi2sum;
-   PetscScalar      *phi2_array, *phi2sum_array;
+   PetscErrorCode    ierr;
+   AppCtx            user;	  
+   Vec               phi;
+   Vec               u, G, Gproj, psi, vec_one, phi2, phi2sum;
+   PetscScalar       *phi2_array, *phi2sum_array;
    
-   PetscScalar		lambda, F, Fold;
-   PetscScalar		stepmax = 1.0e+5;
-   PetscScalar		stepmin = 1.0e-5;
-   PetscScalar		error, tol = 1.0e-3;
-   const char			u_prfx[] = "Partition_U-";
+   PetscScalar		   lambda, F, Fold;
+   PetscScalar       stepmax = 1.0e+5;
+   PetscScalar       stepmin = 1.0e-5;
+   PetscScalar       error, tol = 1.0e-3;
+   const char			u_prfx[]   = "Partition_U-";
    const char			phi_prfx[] = "Partition_Phi-";
    char				   filename [ FILENAME_MAX ];
    const char			txtsfx[] = ".txt";
    const char			rawsfx[] = ".raw";
    const char			vtksfx[] = ".vtk";
-   PetscScalar      *phi_array, *psi_array;
-   PetscScalar      muinit, mufinal;
-   PetscScalar      GNorm;
+   const char			geosfx[] = ".geo";
+   const char			ressfx[] = ".res";
+   PetscScalar       *phi_array, *psi_array;
+   PetscScalar       muinit, mufinal;
+   PetscScalar       GNorm;
        
    int				   N, i, it;
-   PetscInt         maxit = 1000;
+   PetscInt          maxit = 1000;
    PetscTruth			flag;
    
-   PetscMPIInt		numprocs, myrank;
-   PetscViewer      viewer;
+   PetscMPIInt       numprocs, myrank;
+   PetscViewer       viewer;
    
    /* Eigenvalue solver stuff */
    EPSType			   type;
-   ST					st;
-   PetscScalar		st_shift = 0.0;
+   ST				      st;
+   PetscScalar       st_shift = 0.0;
    STType				st_type	= STSINV; 
    int				   its;
    KSP				   eps_ksp;
-   PC					eps_pc;
-   PetscTruth       printhelp;
+   PC                eps_pc;
+   PetscTruth        printhelp;
    
-   PetscLogDouble	eps_ts, eps_tf, eps_t;
+   PetscLogDouble	   eps_ts, eps_tf, eps_t;
    
    
    SlepcInitialize(&argc, &argv, (char*)0, help);
@@ -170,18 +174,30 @@ int main (int argc, char ** argv) {
    sprintf(filename, "%s%.3d%s", phi_prfx, myrank, txtsfx);
    PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
    VecView_TXT(phi, filename);
-	 
+
+   // Save .geo and .case file
+   if (!myrank){
+      DAView_GEOASCII(user.da, "Partition.geo");	 
+      PetscViewerASCIIOpen(PETSC_COMM_SELF, "Partition.case", &viewer);
+      PetscViewerASCIIPrintf(viewer, "FORMAT\n");
+      PetscViewerASCIIPrintf(viewer, "type:  ensight gold\n");
+      PetscViewerASCIIPrintf(viewer, "GEOMETRY\n");
+      PetscViewerASCIIPrintf(viewer, "model: Partition.geo\n");
+      PetscViewerASCIIPrintf(viewer, "VARIABLE\n");
+      for (i=0; i<numprocs; i++){
+         PetscViewerASCIIPrintf(viewer, "scalar per node: U%i %s%.3d%s\n", i, u_prfx, i, ressfx);
+      }
+      for (i=0; i<numprocs; i++){
+         PetscViewerASCIIPrintf(viewer, "scalar per node: PHI%i %s%.3d%s\n", i, phi_prfx, i, ressfx);
+      }
+      PetscViewerFlush(viewer);
+      PetscViewerDestroy(viewer);
+   }
+   
    F = 0.0;
    Fold = 0.0;
    it = 0;
    PetscPrintf(PETSC_COMM_WORLD, "Iteration %d:\n", it);
-
-
-//   ComputeLambdaU(user, phi, &lambda, u);
-//   ComputeK(user, phi);
-//   SlepcFinalize();
-//   return 0;
-   
    ComputeLambdaU(user, phi, &lambda, u);
    
    
@@ -259,7 +275,7 @@ int main (int argc, char ** argv) {
       
       
       
-      // Saves the results in matlab or vtk format
+      // Saves the results
       if (it%10 == 0){
          // Save into a new file
 		   //sprintf(filename, "%s%.3d-%.5d%s", u_prfx, myrank, it, txtsfx);
@@ -274,6 +290,11 @@ int main (int argc, char ** argv) {
          PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
          VecView_VTKASCII(u, filename);
          
+         // Save in ensight gold ASCII format
+         sprintf(filename, "%s%.3d%s", u_prfx, myrank, ressfx);
+         PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
+         VecView_EnsightASCII(u, filename);
+
          //sprintf(filename, "%s%.3d-%.5d%s", phi_prfx, myrank, it, txtsfx);
          sprintf(filename, "%s%.3d%s", phi_prfx, myrank, txtsfx);
          PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
@@ -282,6 +303,11 @@ int main (int argc, char ** argv) {
          sprintf(filename, "%s%.3d%s", phi_prfx, myrank, vtksfx);
          PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
          VecView_VTKASCII(phi, filename);
+
+         // Save in ensight gold ASCII format
+         sprintf(filename, "%s%.3d%s", phi_prfx, myrank, ressfx);
+         PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
+         VecView_EnsightASCII(phi, filename);
       }
    } while ( (it < 20 ) || ( ( it < maxit ) && (error > tol) ) );
 
@@ -291,12 +317,19 @@ int main (int argc, char ** argv) {
    sprintf(filename, "%s%.3d%s", u_prfx, myrank, txtsfx);
    PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
    VecView_TXT(u, filename);
+   sprintf(filename, "%s%.3d%s", u_prfx, myrank, ressfx);
+   PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
+   VecView_EnsightASCII(u, filename);
+   
    sprintf(filename, "%s%.3d%s", phi_prfx, myrank, vtksfx);
    PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
    VecView_VTKASCII(phi, filename);
    sprintf(filename, "%s%.3d%s", phi_prfx, myrank, txtsfx);
    PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
    VecView_TXT(phi, filename);
+   sprintf(filename, "%s%.3d%s", phi_prfx, myrank, ressfx);
+   PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
+   VecView_EnsightASCII(phi, filename);
    
    // Be nice and deallocate
    VecDestroy(phi2);
@@ -595,6 +628,104 @@ PetscErrorCode VecView_VTKASCII(Vec x, const char filename[])
   PetscFunctionReturn(0);
 }
 
+PetscErrorCode DAView_GEOASCII(DA da, const char filename []){
+   PetscInt          mx, my, mz;
+   PetscMPIInt       rank, size;
+   PetscViewer       viewer;
+   MPI_Comm          comm;
+   PetscErrorCode    ierr;
+   const char        *name;
+   
+   ierr = PetscObjectGetComm((PetscObject) da, &comm); CHKERRQ(ierr);
+   ierr = MPI_Comm_rank(comm, &rank); CHKERRQ(ierr);
+   ierr = MPI_Comm_size(comm, &size); CHKERRQ(ierr);
+
+   ierr = DAGetInfo(da, 0, &mx, &my, &mz,0,0,0, 0,0,0,0); CHKERRQ(ierr);
+   ierr = PetscObjectGetName((PetscObject) da, &name); CHKERRQ(ierr);
+   if (!rank){
+      ierr = PetscViewerASCIIOpen(PETSC_COMM_SELF, filename, &viewer); CHKERRQ(ierr);
+      ierr = PetscViewerASCIIPrintf(viewer, "%s\n", name); CHKERRQ(ierr);
+      ierr = PetscViewerASCIIPrintf(viewer, "Generated by DAView_GEOASCII\n"); CHKERRQ(ierr);
+      ierr = PetscViewerASCIIPrintf(viewer, "node id given\nelement id given\nextents\n"); CHKERRQ(ierr);
+      ierr = PetscViewerASCIIPrintf(viewer, "%12.5e%12.5e\n", (PetscScalar) 0, (PetscScalar) mx-1); CHKERRQ(ierr);
+      ierr = PetscViewerASCIIPrintf(viewer, "%12.5e%12.5e\n", (PetscScalar) 0, (PetscScalar) my-1); CHKERRQ(ierr);
+      ierr = PetscViewerASCIIPrintf(viewer, "%12.5e%12.5e\n", (PetscScalar) 0, (PetscScalar) mz-1); CHKERRQ(ierr);
+      ierr = PetscViewerASCIIPrintf(viewer, "part\n"); CHKERRQ(ierr);
+      ierr = PetscViewerASCIIPrintf(viewer, "%10d\n", 1); CHKERRQ(ierr);
+      ierr = PetscViewerASCIIPrintf(viewer, "%s\n", name); CHKERRQ(ierr);
+      ierr = PetscViewerASCIIPrintf(viewer, "block uniform\n"); CHKERRQ(ierr);
+      ierr = PetscViewerASCIIPrintf(viewer, "%10d%10d%10d\n", mx, my, mz); CHKERRQ(ierr);
+      ierr = PetscViewerASCIIPrintf(viewer, "%12.5e\n", 0.0); CHKERRQ(ierr);
+      ierr = PetscViewerASCIIPrintf(viewer, "%12.5e\n", 0.0); CHKERRQ(ierr);
+      ierr = PetscViewerASCIIPrintf(viewer, "%12.5e\n", 0.0); CHKERRQ(ierr);
+      ierr = PetscViewerASCIIPrintf(viewer, "%12.5e\n", 1.0); CHKERRQ(ierr);
+      ierr = PetscViewerASCIIPrintf(viewer, "%12.5e\n", 1.0); CHKERRQ(ierr);
+      ierr = PetscViewerASCIIPrintf(viewer, "%12.5e\n", 1.0); CHKERRQ(ierr);
+      ierr = PetscViewerFlush(viewer); CHKERRQ(ierr);
+      ierr = PetscViewerDestroy(viewer); CHKERRQ(ierr);
+   }
+   PetscFunctionReturn(0);
+}
+
+PetscErrorCode VecView_EnsightASCII(Vec x, const char filename[]){
+   Vec               natural, io;
+   VecScatter        tozero;
+   PetscMPIInt       rank, size;
+   int               N;
+   PetscScalar       *io_array;
+   DA                da;
+   PetscViewer       viewer;
+   PetscInt          i, j, k, mx, my, mz, dof;
+   MPI_Comm          comm;
+   PetscErrorCode    ierr;
+   const char        *name;
+   
+   
+   PetscFunctionBegin;
+   ierr = PetscObjectGetComm((PetscObject) x, &comm); CHKERRQ(ierr);
+   ierr = MPI_Comm_rank(comm, &rank); CHKERRQ(ierr);
+   ierr = MPI_Comm_size(comm, &size); CHKERRQ(ierr);
+   
+   ierr = VecGetSize(x, &N); CHKERRQ(ierr);
+   
+   ierr = PetscObjectQuery((PetscObject) x, "DA", (PetscObject *) &da); CHKERRQ(ierr);
+   if (!da) SETERRQ(PETSC_ERR_ARG_WRONG,"Vector not generated from a DA");
+   ierr = DAGetInfo(da, 0, 0,0,0, 0,0,0, &dof, 0,0,0); CHKERRQ(ierr);
+   if (dof!=1) SETERRQ(PETSC_ERR_ARG_WRONG,"dof>1 not implemented yet");
+
+   ierr = PetscObjectGetName((PetscObject)x,&name);
+
+   
+   ierr = DACreateNaturalVector(da, &natural); CHKERRQ(ierr);
+   ierr = DAGlobalToNaturalBegin(da, x, INSERT_VALUES, natural); CHKERRQ(ierr);
+   ierr = DAGlobalToNaturalEnd(da, x, INSERT_VALUES, natural); CHKERRQ(ierr);
+   
+   ierr = VecScatterCreateToZero(natural, &tozero, &io); CHKERRQ(ierr);
+   ierr = VecScatterBegin(tozero, natural, io, INSERT_VALUES, SCATTER_FORWARD); CHKERRQ(ierr);
+   ierr = VecScatterEnd(tozero, natural, io, INSERT_VALUES, SCATTER_FORWARD); CHKERRQ(ierr);
+   ierr = VecScatterDestroy(tozero); CHKERRQ(ierr);
+   ierr = VecDestroy(natural); CHKERRQ(ierr);
+   
+   ierr = VecGetArray(io, &io_array); CHKERRQ(ierr);	  
+   
+   if (!rank){
+      ierr = PetscViewerASCIIOpen(PETSC_COMM_SELF, filename, &viewer); CHKERRQ(ierr);
+
+      ierr = PetscViewerASCIIPrintf(viewer, "%s\n",name);CHKERRQ(ierr);
+      ierr = PetscViewerASCIIPrintf(viewer, "part\n");CHKERRQ(ierr);
+      ierr = PetscViewerASCIIPrintf(viewer, "%10d\n", 1);CHKERRQ(ierr);
+      ierr = PetscViewerASCIIPrintf(viewer, "block\n");CHKERRQ(ierr);
+
+      for(i=0; i<N; i++){
+         ierr = PetscViewerASCIIPrintf(viewer, "%12.5e\n", PetscRealPart(io_array[i])); CHKERRQ(ierr);
+      }
+      ierr = PetscViewerFlush(viewer); CHKERRQ(ierr);
+      ierr = PetscViewerDestroy(viewer); CHKERRQ(ierr);
+   }
+   ierr = VecRestoreArray(io, &io_array); CHKERRQ(ierr);		
+   ierr = VecDestroy(io); CHKERRQ(ierr);
+   PetscFunctionReturn(0);
+}
 
 PetscErrorCode SimplexProjection(AppCtx user, Vec phi)
 {
