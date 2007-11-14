@@ -281,29 +281,29 @@ int main (int argc, char ** argv) {
 		   //sprintf(filename, "%s%.3d-%.5d%s", u_prfx, myrank, it, txtsfx);
  					 
          // Reuse the same file over and over
-         sprintf(filename, "%s%.3d%s", u_prfx, myrank, txtsfx);
-         PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
-         VecView_TXT(u, filename);
-					
+//         sprintf(filename, "%s%.3d%s", u_prfx, myrank, txtsfx);
+//         PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
+//         VecView_TXT(u, filename);
+//					
          // Save in VTK format
-         sprintf(filename, "%s%.3d%s", u_prfx, myrank, vtksfx);
-         PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
-         VecView_VTKASCII(u, filename);
-         
+//         sprintf(filename, "%s%.3d%s", u_prfx, myrank, vtksfx);
+//         PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
+//         VecView_VTKASCII(u, filename);
+//         
          // Save in ensight gold ASCII format
          sprintf(filename, "%s%.3d%s", u_prfx, myrank, ressfx);
          PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
          VecView_EnsightASCII(u, filename);
 
          //sprintf(filename, "%s%.3d-%.5d%s", phi_prfx, myrank, it, txtsfx);
-         sprintf(filename, "%s%.3d%s", phi_prfx, myrank, txtsfx);
-         PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
-         VecView_TXT(phi, filename);
-					
-         sprintf(filename, "%s%.3d%s", phi_prfx, myrank, vtksfx);
-         PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
-         VecView_VTKASCII(phi, filename);
-
+//         sprintf(filename, "%s%.3d%s", phi_prfx, myrank, txtsfx);
+//         PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
+//         VecView_TXT(phi, filename);
+//					
+//         sprintf(filename, "%s%.3d%s", phi_prfx, myrank, vtksfx);
+//         PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
+//         VecView_VTKASCII(phi, filename);
+//
          // Save in ensight gold ASCII format
          sprintf(filename, "%s%.3d%s", phi_prfx, myrank, ressfx);
          PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
@@ -311,22 +311,22 @@ int main (int argc, char ** argv) {
       }
    } while ( (it < 20 ) || ( ( it < maxit ) && (error > tol) ) );
 
-   sprintf(filename, "%s%.3d%s", u_prfx, myrank, vtksfx);
-   PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
-   VecView_VTKASCII(u, filename);
-   sprintf(filename, "%s%.3d%s", u_prfx, myrank, txtsfx);
-   PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
-   VecView_TXT(u, filename);
+//   sprintf(filename, "%s%.3d%s", u_prfx, myrank, vtksfx);
+//   PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
+//   VecView_VTKASCII(u, filename);
+//   sprintf(filename, "%s%.3d%s", u_prfx, myrank, txtsfx);
+//   PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
+//   VecView_TXT(u, filename);
    sprintf(filename, "%s%.3d%s", u_prfx, myrank, ressfx);
    PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
    VecView_EnsightASCII(u, filename);
    
-   sprintf(filename, "%s%.3d%s", phi_prfx, myrank, vtksfx);
-   PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
-   VecView_VTKASCII(phi, filename);
-   sprintf(filename, "%s%.3d%s", phi_prfx, myrank, txtsfx);
-   PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
-   VecView_TXT(phi, filename);
+//   sprintf(filename, "%s%.3d%s", phi_prfx, myrank, vtksfx);
+//   PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
+//   VecView_VTKASCII(phi, filename);
+//   sprintf(filename, "%s%.3d%s", phi_prfx, myrank, txtsfx);
+//   PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
+//   VecView_TXT(phi, filename);
    sprintf(filename, "%s%.3d%s", phi_prfx, myrank, ressfx);
    PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
    VecView_EnsightASCII(phi, filename);
