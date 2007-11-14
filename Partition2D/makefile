@@ -16,3 +16,6 @@ Partition2D: Partition2D.o  chkopts
 
 Partition2DPer: Partition2DPer.o  chkopts
 	-${CLINKER} -o Partition2DPer Partition2DPer.o ${SLEPC_LIB}
+
+Partition2DMR: Partition2DMR.o  chkopts
+	-${CLINKER} -o Partition2DMR Partition2DMR.o ${SLEPC_LIB}
