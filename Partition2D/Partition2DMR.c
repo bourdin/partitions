@@ -178,9 +178,9 @@ int main (int argc, char ** argv) {
         VecScale(phi, (PetscScalar) 1.0 / (PetscScalar) numprocs);
         SimplexProjection(user, phi);
         
-        sprintf(filename, "%s%.3d%s", phi_prfx, myrank, txtsfx);
-        PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
-        VecView_TXT(phi, filename);
+	//        sprintf(filename, "%s%.3d%s", phi_prfx, myrank, txtsfx);
+	//        PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
+	//        VecView_TXT(phi, filename);
     	 
     	    // Save .geo and .case file
         if (!myrank){
@@ -216,7 +216,7 @@ int main (int argc, char ** argv) {
         PetscViewerASCIIOpen(PETSC_COMM_WORLD, "Partition.log", &viewerbest);
 
 
-        sprintf(logfile, "Partition-%i.log", irun);
+        sprintf(logfile, "Partition-%.4i.log", irun);
         PetscViewerASCIIOpen(PETSC_COMM_WORLD, logfile, &viewer);
         PetscViewerASCIIPrintf(viewer, "%d   %e   ", it, F);
         PetscViewerASCIISynchronizedPrintf(viewer, "%e   ", lambda);
@@ -278,7 +278,7 @@ int main (int argc, char ** argv) {
     
     
             // Update the step
-    
+	    /*    
     		if (F<=Fold) {
                 user.step = user.step * 1.2;
     			user.step = PetscMin(user.step, stepmax);
@@ -287,7 +287,7 @@ int main (int argc, char ** argv) {
                 user.step = user.step / 2.0;
                 user.step = PetscMax(user.step, stepmin);
             }
-    
+	    */
             // Display some stuff
     		PetscPrintf(PETSC_COMM_WORLD, "F = %e, step = %e, error = %e, mu = %e\n\n", F, user.step, error, user.mu);
     
@@ -306,31 +306,31 @@ int main (int argc, char ** argv) {
                 			 
                 // Reuse the same file over and over
                 sprintf(filename, "%s%.3d-%.3d%s", u_prfx, myrank, irun, txtsfx);
-                PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
+		//                PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
                 VecView_TXT(u, filename);
                    		
                 // Save in VTK format
                 sprintf(filename, "%s%.3d-%.3d%s", u_prfx, myrank, irun, vtksfx);
-                PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
+		//                PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
                 VecView_VTKASCII(u, filename);
                 
                 // Save in ensight gold ASCII format
                 sprintf(filename, "%s%.3d-%.3d%s", u_prfx, myrank, irun, ressfx);
-                PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
+		//                PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
                 VecView_EnsightASCII(u, filename);
                 
                 //sprintf(filename, "%s%.3d-%.5d%s", phi_prfx, myrank, it, txtsfx);
                 sprintf(filename, "%s%.3d-%.3d%s", phi_prfx, myrank, irun, txtsfx);
-                PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
+		//                PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
                 VecView_TXT(phi, filename);
                    		
                 sprintf(filename, "%s%.3d-%.3d%s", phi_prfx, myrank, irun, vtksfx);
-                PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
+		//                PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
                 VecView_VTKASCII(phi, filename);
                 
                 // Save in ensight gold ASCII format
                 sprintf(filename, "%s%.3d-%.3d%s", phi_prfx, myrank, irun, ressfx);
-                PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
+		//                PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
                 VecView_EnsightASCII(phi, filename);
             }
         } while ( (it < 20 ) || ( ( it < maxit ) && (error > tol) ) );
@@ -348,23 +348,23 @@ int main (int argc, char ** argv) {
             ibest = irun;
 
             sprintf(filename, "%s%.3d%s", ubest_prfx, myrank, vtksfx);
-            PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
+	    //            PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
             VecView_VTKASCII(u, filename);
             sprintf(filename, "%s%.3d%s", ubest_prfx, myrank, txtsfx);
-            PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
+	    //            PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
             VecView_TXT(u, filename);
             sprintf(filename, "%s%.3d%s", ubest_prfx, myrank, ressfx);
-            PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
+	    //            PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
             VecView_EnsightASCII(u, filename);
             
             sprintf(filename, "%s%.3d%s", phibest_prfx, myrank, vtksfx);
-            PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
+	    //            PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
             VecView_VTKASCII(phi, filename);
             sprintf(filename, "%s%.3d%s", phibest_prfx, myrank, txtsfx);
-            PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
+	    //            PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
             VecView_TXT(phi, filename);
             sprintf(filename, "%s%.3d%s", phibest_prfx, myrank, ressfx);
-            PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
+	    //            PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
             VecView_EnsightASCII(phi, filename);
         }
         PetscPrintf(PETSC_COMM_WORLD, "\n\nBEST COMPUTATION IS NOW #%i\n\n", ibest);
