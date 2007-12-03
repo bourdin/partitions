@@ -299,38 +299,39 @@ int main (int argc, char ** argv) {
           
           
           
+	    if (it%10 == 0){
+	      sprintf(filename, "%s%.3d-%.3d%s", u_prfx, myrank, irun, txtsfx);
+	      VecView_TXT(u, filename);
+	      
+	      // Save in ensight gold ASCII format
+	      sprintf(filename, "%s%.3d-%.3d%s", u_prfx, myrank, irun, ressfx);
+	      VecView_EnsightASCII(u, filename);
+	      
+	      sprintf(filename, "%s%.3d-%.3d%s", phi_prfx, myrank, irun, txtsfx);
+	      VecView_TXT(phi, filename);
+	      
+	      // Save in ensight gold ASCII format
+	      sprintf(filename, "%s%.3d-%.3d%s", phi_prfx, myrank, irun, ressfx);
+	      VecView_EnsightASCII(phi, filename);
+	    }
+
         } while ( (it < 20 ) || ( ( it < maxit ) && (error > tol) ) );
         
 	// Save the results
-	if (it%10 == 0){
-	  sprintf(filename, "%s%.3d-%.3d%s", u_prfx, myrank, irun, txtsfx);
-	  //PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
-	  VecView_TXT(u, filename);
-	  
-	  // Save in VTK format
-	  //sprintf(filename, "%s%.3d-%.3d%s", u_prfx, myrank, irun, vtksfx);
-	  //PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
-	  //VecView_VTKASCII(u, filename);
-	  
-	  // Save in ensight gold ASCII format
-	  sprintf(filename, "%s%.3d-%.3d%s", u_prfx, myrank, irun, ressfx);
-	  //PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
-	  VecView_EnsightASCII(u, filename);
-	  
-	  //sprintf(filename, "%s%.3d-%.5d%s", phi_prfx, myrank, it, txtsfx);
-	  sprintf(filename, "%s%.3d-%.3d%s", phi_prfx, myrank, irun, txtsfx);
-	  //PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
-	  VecView_TXT(phi, filename);
-	  
-	  //sprintf(filename, "%s%.3d-%.3d%s", phi_prfx, myrank, irun, vtksfx);
-	  //PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
-	  //VecView_VTKASCII(phi, filename);
-	  
-	  // Save in ensight gold ASCII format
-	  sprintf(filename, "%s%.3d-%.3d%s", phi_prfx, myrank, irun, ressfx);
-	  //PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
-	  VecView_EnsightASCII(phi, filename);
-	}
+	sprintf(filename, "%s%.3d-%.3d%s", u_prfx, myrank, irun, txtsfx);
+	VecView_TXT(u, filename);
+	
+	// Save in ensight gold ASCII format
+	sprintf(filename, "%s%.3d-%.3d%s", u_prfx, myrank, irun, ressfx);
+	VecView_EnsightASCII(u, filename);
+	
+	sprintf(filename, "%s%.3d-%.3d%s", phi_prfx, myrank, irun, txtsfx);
+	VecView_TXT(phi, filename);
+	
+	// Save in ensight gold ASCII format
+	sprintf(filename, "%s%.3d-%.3d%s", phi_prfx, myrank, irun, ressfx);
+	VecView_EnsightASCII(phi, filename);
+	
         PetscViewerDestroy(viewer);
 
         PetscViewerASCIIPrintf(viewerbest, "%d   %e   ", irun, F);
@@ -343,28 +344,16 @@ int main (int argc, char ** argv) {
             Fbest = F;
             ibest = irun;
 
-            //sprintf(filename, "%s%.3d%s", ubest_prfx, myrank, vtksfx);
-	    //PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
-            //VecView_VTKASCII(u, filename);
-
             sprintf(filename, "%s%.3d%s", ubest_prfx, myrank, txtsfx);
-	    //PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
             VecView_TXT(u, filename);
 
             sprintf(filename, "%s%.3d%s", ubest_prfx, myrank, ressfx);
-	    //PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
             VecView_EnsightASCII(u, filename);
             
-            //sprintf(filename, "%s%.3d%s", phibest_prfx, myrank, vtksfx);
-	    //PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
-            //VecView_VTKASCII(phi, filename);
-
             sprintf(filename, "%s%.3d%s", phibest_prfx, myrank, txtsfx);
-	    //PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
             VecView_TXT(phi, filename);
 
             sprintf(filename, "%s%.3d%s", phibest_prfx, myrank, ressfx);
-	    //PetscPrintf(PETSC_COMM_SELF, "[%d] Saving %s\n", myrank, filename);
             VecView_EnsightASCII(phi, filename);
         }
         PetscPrintf(PETSC_COMM_WORLD, "\n\nBEST COMPUTATION IS NOW #%i\n\n", ibest);
