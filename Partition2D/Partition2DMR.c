@@ -34,6 +34,7 @@ extern PetscErrorCode VecView_VTKASCII(Vec x, const char filename[]);
 extern PetscErrorCode DAView_GEOASCII(DA da, const char filename []);
 extern PetscErrorCode VecView_EnsightASCII(Vec x, const char filename[]);
 extern PetscErrorCode SimplexProjection(AppCtx user, Vec x);
+extern PetscErrorCode SimplexProjection2(AppCtx user, Vec x);
 
       
 
@@ -46,7 +47,7 @@ int main (int argc, char ** argv) {
     PetscScalar     *phi2_array, *phi2sum_array;
     
     PetscScalar		lambda, F, Fold, Fbest;
-    PetscScalar		stepmax = 1.0e+5;
+    PetscScalar		stepmax = 1.0e+6;
     PetscScalar		stepmin = 1.0e-5;
     PetscScalar		error, tol = 1.0e-3;
     const char		u_prfx[] = "Partition_U-";
@@ -278,16 +279,14 @@ int main (int argc, char ** argv) {
     
     
             // Update the step
-	    /*    
     		if (F<=Fold) {
-                user.step = user.step * 1.2;
+                user.step = user.step * 1.05;
     			user.step = PetscMin(user.step, stepmax);
             }
     		else {
-                user.step = user.step / 2.0;
+                user.step = user.step * 0.75;
                 user.step = PetscMax(user.step, stepmin);
             }
-	    */
             // Display some stuff
     		PetscPrintf(PETSC_COMM_WORLD, "F = %e, step = %e, error = %e, mu = %e\n\n", F, user.step, error, user.mu);
     
@@ -487,6 +486,9 @@ extern PetscErrorCode InitPhiRandom(AppCtx user, Vec phi){
     PetscRandomSetFromOptions(rndm);
     PetscGetTime(&tim);
     PetscRandomSetSeed(rndm, (unsigned long) tim*rank);
+
+    PetscRandomSetSeed(rndm, (unsigned long) rank);
+	 
     PetscRandomSeed(rndm);
     VecSetRandom(phi, rndm);
     PetscRandomDestroy(rndm);
@@ -748,7 +750,7 @@ PetscErrorCode VecView_EnsightASCII(Vec x, const char filename[]){
 }
 
 
-PetscErrorCode SimplexProjection(AppCtx user, Vec phi)
+PetscErrorCode SimplexProjection2(AppCtx user, Vec phi)
 {
     PetscMPIInt     *I, *n;
     Vec             psi;
@@ -790,4 +792,45 @@ PetscErrorCode SimplexProjection(AppCtx user, Vec phi)
     PetscFree(n);
     
     PetscFunctionReturn(0);
+}
+
+PetscErrorCode SimplexProjection(AppCtx user, Vec phi)
+{
+	PetscMPIInt     *I, *n;
+	Vec             psi;
+	PetscScalar     *psi_array, *phi_array;
+	PetscInt        l, i;
+	PetscMPIInt     myrank, numprocs;
+	
+	MPI_Comm_rank(PETSC_COMM_WORLD, &myrank);
+	MPI_Comm_size(PETSC_COMM_WORLD, &numprocs);
+	
+	VecDuplicate(phi, &psi);
+	VecGetArray(psi, &psi_array);
+	VecGetArray(phi, &phi_array);
+	
+	PetscMalloc(user.nx*user.ny*sizeof(PetscMPIInt), &I);
+	PetscMalloc(user.nx*user.ny*sizeof(PetscMPIInt), &n);
+	for (i=0; i<user.nx*user.ny; i++) I[i] = 0;
+	for (l=0; l<numprocs; l++){
+		for (i=0; i<user.nx*user.ny; i++){
+			if (I[i]) phi_array[i] = 0.0;
+		}
+		MPI_Allreduce(phi_array, psi_array, user.nx * user.ny, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
+		MPI_Allreduce(I, n, user.nx * user.ny, MPI_INT, MPI_SUM, PETSC_COMM_WORLD);
+		for (i=0; i<user.nx*user.ny; i++){
+			if ((psi_array[i] > 1.0) && (numprocs - n[i])) phi_array[i] = phi_array[i]- (PetscScalar) (1-I[i]) * (psi_array[i]-1.0) / (PetscScalar) (numprocs - n[i]);     
+			if (phi_array[i] < 0.0) {
+				I[i]  = 1;
+				phi_array[i]= (PetscScalar) 0.0;
+			}
+		}
+	}
+	VecRestoreArray(phi, &phi_array);
+	VecRestoreArray(psi, &psi_array);   
+	VecDestroy(psi);
+	PetscFree(I);
+	PetscFree(n);
+	
+	PetscFunctionReturn(0);
 }
