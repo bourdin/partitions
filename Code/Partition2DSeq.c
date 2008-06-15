@@ -34,6 +34,7 @@ extern PetscErrorCode VecView_VTKASCII(Vec x, const char filename[]);
 extern PetscErrorCode DAView_GEOASCII(DA da, const char filename []);
 extern PetscErrorCode VecView_EnsightASCII(Vec x, const char filename[]);
 extern PetscErrorCode SimplexProjection(AppCtx user, Vec x);
+extern PetscErrorCode SimplexProjection2(AppCtx use, Vec x);
 extern PetscErrorCode VecRead_TXT(Vec x, const char filename[]);
       
 
@@ -775,6 +776,37 @@ PetscErrorCode VecView_EnsightASCII(Vec x, const char filename[]){
 }
 
 
+PetscErrorCode SimplexProjection2(AppCtx user, Vec phi)
+{
+    PetscMPIInt      myrank, numprocs;
+    PetscScalar      *phi_array, *psi_array;
+    Vec              psi, one;
+    PetscInt         N;
+        
+    MPI_Comm_rank(PETSC_COMM_WORLD, &myrank);
+    MPI_Comm_size(PETSC_COMM_WORLD, &numprocs);
+    
+    VecDuplicate(phi, &psi);
+    VecDuplicate(phi, &one);
+    VecSet(one, (PetscScalar) 1.0);
+    VecGetArray(psi, &psi_array);
+    VecGetArray(phi, &phi_array);
+    VecGetSize(psi, &N);
+    
+    MPI_Allreduce(phi_array, psi_array, N, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
+    
+    VecRestoreArray(psi, &psi_array);
+    VecRestoreArray(phi, &phi_array);
+    
+    VecPointwiseMax(psi, psi, one);
+    VecPointwiseDivide(phi, phi, psi);
+    
+    VecDestroy(psi);
+    VecDestroy(one);
+    
+    PetscFunctionReturn(0);
+}
+
 PetscErrorCode SimplexProjection(AppCtx user, Vec phi)
 {
    PetscMPIInt       *I, *n;
@@ -820,15 +852,6 @@ PetscErrorCode SimplexProjection(AppCtx user, Vec phi)
    
    PetscFunctionReturn(0);
 }
-      
-      
-//PetscErrorCode Scalprod(AppCtx user, Vec phi,Vec G)
-//{      
-//        
-//      
-//      
-//      
-//}      
       
       
       
