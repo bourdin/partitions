@@ -3,9 +3,11 @@ function [valt,x_0s,std0] = fdm_assymp_eigenvalues(numeig,nbvertex,mu,nphi,perio
 %
 %
 %
-%  fdm_assymp_eigenvalues(numeig,nbvertex,mu,nphi,periodic,dimension,reload,nstep)
-%  fdm_assymp_eigenvalues(1,5e1,1e3,8,0,2,0,1) sans reload
-%  fdm_assymp_eigenvalues(1,6e1,1e3,8,0,2,1,1) avec reload
+%  fdm_assymp_eigenvalues(numeig,nbvertex,mu, nphi,periodic,dimension,reload,nstep)
+%  fdm_assymp_eigenvalues(1,     5e1,     1e3,8,   0,       2,        0,     1) 
+% sans reload
+%  fdm_assymp_eigenvalues(1,     6e1,     1e3,8,   0,       2,        1,     1)
+% avec reload
 %
 %
 
@@ -69,7 +71,7 @@ nbvertex                             = round(nbvertex/nphi)*nphi;
 %====================================
 % Grille et matrice du laplacien
 adresse1                 = pwd;
-cd /home/oudet/Matlab/Toolbox/Fdm/;
+%cd /home/oudet/Matlab/Toolbox/Fdm/;
 disp(' ')
 disp('Debut d assemblage de la matrice du laplacien')
 
@@ -363,9 +365,6 @@ end
 
 phisp                    = X(:);
 
-
-
-
 %====================================
 function phisp = project_simplex_wrong(phis,nphi)
 
@@ -411,10 +410,6 @@ lambdaj                  = [(A(1:(end-1),1:(end-1))\B(1:end-1)')',0];
 sligne                   = sum(lambdaj);
 lambdai                  = (fi - sligne)/nphi;
 Mx_0                     = Mx_0 - (lambdai*ones(1,nphi) + ones(npt,1)*lambdaj)/2;
-
-
-
-
 
 %====================================
 function Mx_0n = reloadproject(numeig,strperiodic,nbvertexold,Xl,nphi,mu,dimension,numex)
@@ -541,47 +536,6 @@ end
 gradphir(:)                                     = gradphi(:);
 gradphi                                         = gradphir;
 gradphi                                         = Prob.INFOS_PERSO.mu(1)*gradphi;
-
-%====================================
-function phisp = project_simplex_wrong(phis,nphi)
-
-
-
-dim                      = nphi;
-n                        = length(phis)/dim;
-X                        = reshape(phis,n,dim);
-X                        = max(X,0);
-sX                       = sum(X,2);
-I                        = find(sX>1);
-X(I,:)                   = X(I,:)./(sX(I)*ones(1,dim));
-phisp                    = zeros(size(phis));
-phisp(:)                 = X(:);
-
-%====================================
-function phisp = project_simplex(phis,nphi)
-
-
-
-dim                      = nphi;
-n                        = length(phis)/dim;
-X                        = reshape(phis,n,dim);
-I                        = zeros(n,dim); % Vaut 1 si X(I) = 0 et 0 sinon
-
-for k = 1:dim
- %%%%%
- % On projette X sur VI courant
- X                      = X.*(1-I);  % xij = 0 si Iij = 1
- sumXI                  = sum(X,2);  % Attention ordre important
- nI                     = max(dim - sum(I,2),1e-6);
- %nI                     = dim - sum(I,2);
- %X(nI>0,:)              = X(nI>0,:) - (1-I(nI>0,:)).*(((sumXI(nI>0)-1)./nI(nI>0))*ones(1,dim));
- X                      = X         - (1-I).*(((sumXI-1)./nI)*ones(1,dim));
- % Seconde etape
- I                      = min(I + (X<0),1);
- X                      = X - I.*(X<0).*X;
-end
-
-phisp                    = X(:);
 
 function gradv = cost_g(phis,Prob)
 
