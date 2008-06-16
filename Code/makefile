@@ -5,6 +5,9 @@ include ${SLEPC_DIR}/bmake/slepc_common
 Partition2DSeq: Partition2DSeq.o  chkopts
 	-${CLINKER} -o Partition2DSeq Partition2DSeq.o ${SLEPC_LIB}
 
+Partition2DSimplified: Partition2DSimplified.o  chkopts
+	-${CLINKER} -o Partition2DSimplified Partition2DSimplified.o ${SLEPC_LIB}
+
 Partition3DSeq: Partition3DSeq.o  chkopts
 	-${CLINKER} -o Partition3DSeq Partition3DSeq.o ${SLEPC_LIB}
 
