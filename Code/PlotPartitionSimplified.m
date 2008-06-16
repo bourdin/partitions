@@ -1,28 +1,13 @@
-function[U,Phi] = PlotPartition(k)
+function[U,Phi] = PlotPartitionSimplified()
 
 
 %Phi_filename=strcat('Partition_Phi-000-',num2str(iter,'%.5d'),'.txt');
-Phi_filename=strcat('Partition_Phi-000.txt');
-tmp=load(Phi_filename);
-[nx,ny]=size(tmp);
+Phi_filename=strcat('Partition_Phi_all.txt');
+Phi_all=load(Phi_filename);
+U_filename=strcat('Partition_Phi_all.txt');
+U_all=load(U_filename);
+[nx,ny]=size(Phi_all);
 
-U=zeros(nx,ny,k);
-Phi=zeros(nx,ny,k);
-for i=1:k,
-%    U_filename=strcat('Partition_U-', num2str(i-1, '%.3d'), '-', num2str(iter,'%.5d'),'.txt');
-%    Phi_filename=strcat('Partition_Phi-', num2str(i-1, '%.3d'), '-', num2str(iter,'%.5d'),'.txt');
-    U_filename=strcat('Partition_U-', num2str(i-1,'%.3d'),'.txt');
-    Phi_filename=strcat('Partition_Phi-', num2str(i-1,'%.3d'),'.txt');
-    U(:,:,i) = load(U_filename);
-    Phi(:,:,i) = load(Phi_filename);
-end
-
-U_all = zeros(nx,ny);
-Phi_all = zeros(nx, ny);
-for i=1:k,
-    U_all = U_all + U(:,:,i);
-    Phi_all = Phi_all + i * Phi(:,:,i);
-end
 
 linecolor          = 0.55*ones(1,3);
 %----------------------------------------------------------

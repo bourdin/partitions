@@ -1,4 +1,4 @@
-function[U,Phi] = PlotPartition(k)
+function[U,Phi] = PlotPartitionPer(k)
 
 
 %Phi_filename=strcat('Partition_Phi-000-',num2str(iter,'%.5d'),'.txt');
@@ -32,11 +32,16 @@ close(1);
 end
 pfigure(1);
 hold off;
-x                  = linspace(0,1,nx);
-y                  = linspace(0,1,nx);
+n                  = 3*nx;
+x                  = linspace(-1,2,n);
+y                  = linspace(-1,2,n);
 [X,Y]              = meshgrid(x,y);
 hold on;
-surf(X,Y,U_all/max(abs(U_all(:))));
+surf(X,Y,[[U_all,U_all,U_all];[U_all,U_all,U_all];[U_all,U_all,U_all]]/max(abs(U_all(:))));
+line([0  0],       [-1 2],     [1 1],  'LineWidth', 3, 'Color', linecolor);
+line([1  1],       [-1 2],     [1 1],  'LineWidth', 3, 'Color', linecolor);
+line([-1 2],       [0  0],     [1 1],  'LineWidth', 3, 'Color', linecolor);
+line([-1 2],       [1  1],     [1 1],  'LineWidth', 3, 'Color', linecolor);
 %title(strcat('U: iteration ',num2str(iter)));
 title('U');
 axis equal;axis off
@@ -51,9 +56,13 @@ close(2);
 end
 pfigure(2)
 
-surf(X,Y,Phi_all/max(abs(Phi_all(:))))
+surf(X,Y,[[Phi_all, Phi_all, Phi_all]; [Phi_all, Phi_all, Phi_all] ; [Phi_all, Phi_all, Phi_all]]/max(abs(Phi_all(:))))
 view(2)
 hold on
+line([0  0],       [-1 2],     [1 1],  'LineWidth', 3, 'Color', linecolor);
+line([1  1],       [-1 2],     [1 1],  'LineWidth', 3, 'Color', linecolor);
+line([-1 2],       [0  0],     [1 1],  'LineWidth', 3, 'Color', linecolor);
+line([-1 2],       [1  1],     [1 1],  'LineWidth', 3, 'Color', linecolor);
 %title(strcat('Phi: iteration ',num2str(iter)));
 title('Phi');
 axis equal;axis off

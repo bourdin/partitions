@@ -179,8 +179,8 @@ int main (int argc, char ** argv) {
         VecScale(phi, (PetscScalar) 1.0 / (PetscScalar) numprocs);
 //        SimplexInteriorProjection(user, phi);
         SimplexProjection2(user, phi);
-        sprintf(filename, "%s%.3d%s", phi_prfx, myrank, txtsfx);
-        VecView_TXT(phi, filename);
+//        sprintf(filename, "%s%.3d%s", phi_prfx, myrank, txtsfx);
+//        VecView_TXT(phi, filename);
     } else {
         sprintf(filename, "%s%.3d%s", phi_prfx, myrank, txtsfx);
         VecRead_TXT(phi, filename);
@@ -188,6 +188,7 @@ int main (int argc, char ** argv) {
     
     
 	// Save .geo and .case file
+	/*
     if (!myrank){
         DAView_GEOASCII(user.da, "Partition.geo");	 
         PetscViewerASCIIOpen(PETSC_COMM_SELF, "Partition.case", &viewer);
@@ -205,7 +206,8 @@ int main (int argc, char ** argv) {
         PetscViewerFlush(viewer);
         PetscViewerDestroy(viewer);
     }
-
+    */
+    
     F = 0.0;
     Fold = 0.0;
     it = 0;
@@ -281,27 +283,46 @@ int main (int argc, char ** argv) {
             //sprintf(filename, "%s%.3d-%.5d%s", u_prfx, myrank, it, txtsfx);
             			 
             // Reuse the same file over and over
-            sprintf(filename, "%s%.3d%s", u_prfx, myrank, txtsfx);
-            VecView_TXT(u, filename);
+//            sprintf(filename, "%s%.3d%s", u_prfx, myrank, txtsfx);
+//            VecView_TXT(u, filename);
                		
             // Save in VTK format
             // sprintf(filename, "%s%.3d%s", u_prfx, myrank, vtksfx);
             // VecView_VTKASCII(u, filename);
             
             // Save in ensight gold ASCII format
-            sprintf(filename, "%s%.3d%s", u_prfx, myrank, ressfx);
-            VecView_EnsightASCII(u, filename);
+//            sprintf(filename, "%s%.3d%s", u_prfx, myrank, ressfx);
+//            VecView_EnsightASCII(u, filename);
             
             //sprintf(filename, "%s%.3d-%.5d%s", phi_prfx, myrank, it, txtsfx);
-            sprintf(filename, "%s%.3d%s", phi_prfx, myrank, txtsfx);
-            VecView_TXT(phi, filename);
+//            sprintf(filename, "%s%.3d%s", phi_prfx, myrank, txtsfx);
+//            VecView_TXT(phi, filename);
                		
             // sprintf(filename, "%s%.3d%s", phi_prfx, myrank, vtksfx);
             // VecView_VTKASCII(phi, filename);
             
             // Save in ensight gold ASCII format
-            sprintf(filename, "%s%.3d%s", phi_prfx, myrank, ressfx);
-            VecView_EnsightASCII(phi, filename);
+//            sprintf(filename, "%s%.3d%s", phi_prfx, myrank, ressfx);
+//            VecView_EnsightASCII(phi, filename);
+
+            // Save a composite of all PHI U
+            sprintf(filename, "Partition_Phi_all.txt");
+            VecCopy(phi, phi2);
+            VecScale(phi2, (PetscScalar) pow(2, myrank));
+            VecGetArray(phi2, &phi_array);
+            VecGetArray(psi,  &psi_array);            
+            MPI_Allreduce(phi_array, psi_array, N, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
+            VecRestoreArray(phi2, &phi_array);
+            VecRestoreArray(psi,  &psi_array);
+            VecView_TXT(psi, filename);
+
+            sprintf(filename, "Partition_U_all.txt");
+            VecGetArray(u, &phi_array);
+            VecGetArray(psi,  &psi_array);            
+            MPI_Allreduce(phi_array, psi_array, N, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
+            VecRestoreArray(phi2, &phi_array);
+            VecRestoreArray(psi,  &psi_array);
+            VecView_TXT(psi, filename);
         }
     } while ( (it < 20 ) || ( ( it < maxit ) && (error > tol) ) );
    
