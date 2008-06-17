@@ -278,7 +278,7 @@ int main (int argc, char ** argv) {
       
       
         // Saves the results
-        if (it%10 == 0){
+        if (it%25 == 0){
             // Save into a new file
             //sprintf(filename, "%s%.3d-%.5d%s", u_prfx, myrank, it, txtsfx);
             			 
@@ -308,7 +308,7 @@ int main (int argc, char ** argv) {
             // Save a composite of all PHI U
             sprintf(filename, "Partition_Phi_all.txt");
             VecCopy(phi, phi2);
-            VecScale(phi2, (PetscScalar) pow(2, myrank));
+            VecScale(phi2, (PetscScalar) myrank+1.0);
             VecGetArray(phi2, &phi_array);
             VecGetArray(psi,  &psi_array);            
             MPI_Allreduce(phi_array, psi_array, N, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
