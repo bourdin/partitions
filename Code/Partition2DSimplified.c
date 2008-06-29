@@ -2,6 +2,9 @@ static char help[] = "Compute a partition minimizing the sum of the first eigenv
 
 /*
 The matrix is scaled by a factor 2*hx*hy
+The 2D txt files can be plotted using gnuplot with 
+set size square
+splot 'Partition_Phi_all.txt' matrix with pm3d
 */
 
 #include <stdio.h>
@@ -13,22 +16,27 @@ The matrix is scaled by a factor 2*hx*hy
 #include "slepceps.h"
 
 typedef struct {
-	 PetscInt		nx, ny; /* Dimension of the discretized domain */
-	 PetscScalar	mu;	  /* Penalization factor for the computation of the eigenvalue */
+	 PetscInt		nx, ny;   /* Dimension of the discretized domain */
+	 PetscScalar	mu;	      /* Penalization factor for the computation of the eigenvalue */
 	 PetscTruth		per;	  /* true for periodic boundary conditions, false otherwise */
-	 DA				da;	  /* Information about the distributed layout */
+	 DA				da;	      /* Information about the distributed layout */
 	 PetscScalar	step;	  /* Initial step of the steepest descent methods */
-	 EPS				eps;	  /* Eigenvalue solver context */
-	 Mat				K;		  /* Matrix for the Laplacian */
-	 PetscInt      epsnum; /* which eigenvalues are we optimizing */
+	 PetscScalar    stepmin;
+	 PetscScalar    stepmax;
+	 EPS			eps;      /* Eigenvalue solver context */
+	 Mat			K;        /* Matrix for the Laplacian */
+	 PetscInt       epsnum;   /* which eigenvalues are we optimizing */
 } AppCtx;
 
 extern PetscErrorCode DistanceFromSimplex(PetscScalar *dist, Vec phi); 
+extern PetscErrorCode SaveComposite_Phi(Vec phi, const char filename[]);
+extern PetscErrorCode SaveComposite_U(Vec u, const char filename[]);
 extern PetscErrorCode ComputeK(AppCtx user, Vec phi);
 extern PetscErrorCode ComputeLambdaU(AppCtx user, Vec phi, PetscScalar *lambda, Vec u);
 extern PetscErrorCode ComputeG(AppCtx user, Vec G, Vec u);
 extern PetscErrorCode InitPhiQuarter(AppCtx user, Vec phi);
 extern PetscErrorCode InitPhiRandom(AppCtx user, Vec phi);
+extern PetscErrorCode InitEnsight(AppCtx user, const char u_prfx[], const char phi_prfx[], const char res_sfx[]);
 extern PetscErrorCode VecView_TXT(Vec x, const char filename[]);
 extern PetscErrorCode VecView_RAW(Vec x, const char filename[]);
 extern PetscErrorCode VecView_VTKASCII(Vec x, const char filename[]);
@@ -46,29 +54,28 @@ extern PetscErrorCode VecRead_TXT(Vec x, const char filename[]);
 int main (int argc, char ** argv) {
     PetscErrorCode	ierr;
     AppCtx			user;	  
-    Vec				phi;
-    Vec				u, G, Gproj, psi, vec_one, phi2, phi2sum;
-    PetscScalar      *phi2_array, *phi2sum_array;
+    Vec				phi, phi_err;
+    Vec				u, G;
     
     PetscScalar		lambda, F, Fold;
-    PetscScalar		stepmax = 1.0e4;
-    PetscScalar		stepmin = 1.0e-5;
-    PetscScalar		error, tol = 1.0e-3;
+    PetscScalar		error, myerror, tol;
     const char		u_prfx[] = "Partition_U-";
     const char		phi_prfx[] = "Partition_Phi-";
     char			filename [ FILENAME_MAX ];
-    const char		txtsfx[] = ".txt";
-    const char		rawsfx[] = ".raw";
-    const char		vtksfx[] = ".vtk";
-    const char		geosfx[] = ".geo";
-    const char		ressfx[] = ".res";
+    const char		txt_sfx[] = ".txt";
+    const char		raw_sfx[] = ".raw";
+    const char		vtk_sfx[] = ".vtk";
+    const char		geo_sfx[] = ".geo";
+    const char		res_sfx[] = ".res";
     
-    PetscScalar     *phi_array, *psi_array;
-    PetscScalar     muinit, mufinal;
-    PetscScalar     GNorm;
-        
+    PetscTruth      SaveTXT;
+    PetscTruth      SaveVTK;
+    PetscTruth      SaveEnsight;
+    PetscTruth      SaveComposite;
+    int             modsave;
+            
     int				N, i, it;
-    PetscInt        maxit = 1000;
+    PetscInt        maxit;
     PetscTruth		flag;
     
     PetscMPIInt		numprocs, myrank;
@@ -82,273 +89,261 @@ int main (int argc, char ** argv) {
     int				its;
     KSP				eps_ksp;
     PC				eps_pc;
-    PetscTruth      printhelp, restart;
+    PetscTruth      printhelp;
     
     PetscLogDouble	eps_ts, eps_tf, eps_t;
     PetscReal       dist;
+    PetscTruth      TwoPass;
+    PetscTruth      FirstPass=PETSC_TRUE;
     
-    
-    SlepcInitialize(&argc, &argv, (char*)0, help);
+    PetscFunctionBegin;
+    ierr = SlepcInitialize(&argc, &argv, (char*)0, help); CHKERRQ(ierr);
     
     MPI_Comm_size(PETSC_COMM_WORLD, &numprocs);
     MPI_Comm_rank(PETSC_COMM_WORLD, &myrank);
-    
-    
-    user.epsnum = 1;
-    PetscOptionsGetInt(PETSC_NULL, "-epsnum", &user.epsnum, PETSC_NULL);
-    
-    PetscOptionsGetInt(PETSC_NULL, "-maxit", &maxit, PETSC_NULL);
-    
-    PetscOptionsGetScalar(PETSC_NULL, "-tol", &tol, PETSC_NULL);
-    
-    user.nx = 10;
-    PetscOptionsGetInt(PETSC_NULL, "-nx", &user.nx, PETSC_NULL);
-    PetscOptionsGetInt(PETSC_NULL, "-ny", &user.ny, &flag);	 
-    if( flag==PETSC_FALSE ) user.ny=user.nx;
-    N = user.nx*user.ny;
-    PetscOptionsGetScalar(PETSC_NULL, "-muinit", &muinit, PETSC_NULL);
-    mufinal = muinit;
-    
-    PetscOptionsGetScalar(PETSC_NULL, "-mufinal", &mufinal, PETSC_NULL);
-    user.mu = muinit;
-    
-    user.step = 10.0;
-    stepmin   = user.step;
-    PetscOptionsGetScalar(PETSC_NULL, "-step", &user.step, PETSC_NULL);
-   
     if (numprocs==1) {
-        PetscPrintf(PETSC_COMM_WORLD, "\nCannot partition in less than 2 subsets! ");
-        PetscPrintf(PETSC_COMM_WORLD, "\nRestart on more than 1 cpu");
+        ierr = PetscPrintf(PETSC_COMM_WORLD, "\nCannot partition in less than 2 subsets! "); CHKERRQ(ierr);
+        ierr = PetscPrintf(PETSC_COMM_WORLD, "\nRestart on more than 1 cpu"); CHKERRQ(ierr);
         SlepcFinalize();
         return -1;
     }		
+    
+    
+    // GET PARAMETERS FROM THE COMMAND LINE
+    user.epsnum = 1;
+    ierr = PetscOptionsGetInt(PETSC_NULL, "-epsnum", &user.epsnum, PETSC_NULL);    CHKERRQ(ierr); 
+    maxit = 1000;
+    ierr = PetscOptionsGetInt(PETSC_NULL, "-maxit", &maxit, PETSC_NULL); CHKERRQ(ierr);
+    tol = 1.0e-3;
+    ierr = PetscOptionsGetScalar(PETSC_NULL, "-tol", &tol, PETSC_NULL); CHKERRQ(ierr);
+    
+    user.nx = 10;
+    ierr = PetscOptionsGetInt(PETSC_NULL, "-nx", &user.nx, PETSC_NULL); CHKERRQ(ierr);
+    ierr = PetscOptionsGetInt(PETSC_NULL, "-ny", &user.ny, &flag); CHKERRQ(ierr);
+    if( flag==PETSC_FALSE ) user.ny=user.nx; 
+    N = user.nx*user.ny;
+    
+    user.mu = 1.0e3;
+    ierr = PetscOptionsGetScalar(PETSC_NULL, "-mu", &user.mu, PETSC_NULL); CHKERRQ(ierr);
+    
+    user.step = 10.0;
+    ierr = PetscOptionsGetScalar(PETSC_NULL, "-step", &user.step, PETSC_NULL); CHKERRQ(ierr);
+    user.stepmin = user.step;
+    user.stepmax = 1.0e4;
+    ierr = PetscOptionsGetScalar(PETSC_NULL, "-stepmin", &user.stepmin, PETSC_NULL); CHKERRQ(ierr);
+    ierr = PetscOptionsGetScalar(PETSC_NULL, "-stepmax", &user.stepmax, PETSC_NULL); CHKERRQ(ierr);
    
     user.per = PETSC_FALSE;
-    PetscOptionsGetTruth(PETSC_NULL, "-periodic", &user.per, PETSC_NULL);
+    ierr = PetscOptionsGetTruth(PETSC_NULL, "-periodic", &user.per, PETSC_NULL); CHKERRQ(ierr);
     
-    restart = PETSC_FALSE;
-    PetscOptionsGetTruth(PETSC_NULL, "-restart", &restart, PETSC_NULL);
-    
-    PetscPrintf(PETSC_COMM_WORLD, "\nOptimal Partition problem, N=%d (%dx%d grid)\n\n", 
-      			 N, user.nx, user.ny);
-    PetscLogPrintSummary(MPI_COMM_WORLD,"petsc_log_summary.log");	  
+    SaveTXT = PETSC_FALSE;
+    ierr = PetscOptionsGetTruth(PETSC_NULL, "-saveTXT", &SaveTXT, PETSC_NULL); CHKERRQ(ierr);
+    SaveVTK = PETSC_FALSE;
+    ierr = PetscOptionsGetTruth(PETSC_NULL, "-saveVTK", &SaveVTK, PETSC_NULL); CHKERRQ(ierr);
+    SaveEnsight = PETSC_FALSE;
+    ierr = PetscOptionsGetTruth(PETSC_NULL, "-saveEnsight", &SaveEnsight, PETSC_NULL); CHKERRQ(ierr);
+    SaveComposite = PETSC_TRUE;
+    ierr = PetscOptionsGetTruth(PETSC_NULL, "-saveComposite", &SaveComposite, PETSC_NULL); CHKERRQ(ierr);
+
+    modsave = 25;
+    ierr = PetscOptionsGetInt(PETSC_NULL,   "-modsave", &modsave, PETSC_NULL); CHKERRQ(ierr);
+
+    TwoPass = PETSC_FALSE;
+    ierr = PetscOptionsGetTruth(PETSC_NULL, "-twopass", &TwoPass, PETSC_NULL); CHKERRQ(ierr);
+
+
+    // SOME INITIALIZATIONS
+    ierr = PetscPrintf(PETSC_COMM_WORLD, "\nOptimal Partition problem, N=%d (%dx%d grid)\n\n", N, user.nx, user.ny); CHKERRQ(ierr);
+    ierr = PetscLogPrintSummary(MPI_COMM_WORLD,"petsc_log_summary.log"); CHKERRQ(ierr);
     
     if (user.per) {
-        PetscPrintf(PETSC_COMM_WORLD, "Using periodic boundary conditions\n");
-        DACreate2d(PETSC_COMM_SELF, DA_XYPERIODIC, DA_STENCIL_STAR, user.nx, user.ny,
-     				PETSC_DECIDE, PETSC_DECIDE, 1, 1, PETSC_NULL, PETSC_NULL, &user.da);
+        ierr = PetscPrintf(PETSC_COMM_WORLD, "Using periodic boundary conditions\n"); CHKERRQ(ierr);
+        ierr = DACreate2d(PETSC_COMM_SELF, DA_XYPERIODIC, DA_STENCIL_STAR, user.nx, user.ny, PETSC_DECIDE, PETSC_DECIDE, 1, 1, PETSC_NULL, PETSC_NULL, &user.da); CHKERRQ(ierr);
     }
     else {
-        PetscPrintf(PETSC_COMM_WORLD, "Using non-periodic boundary conditions\n");
-        DACreate2d(PETSC_COMM_SELF, DA_NONPERIODIC, DA_STENCIL_STAR, user.nx, user.ny,
-                     PETSC_DECIDE, PETSC_DECIDE, 1, 1, PETSC_NULL, PETSC_NULL, &user.da);
+        ierr = PetscPrintf(PETSC_COMM_WORLD, "Using non-periodic boundary conditions\n"); CHKERRQ(ierr);
+        ierr = DACreate2d(PETSC_COMM_SELF, DA_NONPERIODIC, DA_STENCIL_STAR, user.nx, user.ny, PETSC_DECIDE, PETSC_DECIDE, 1, 1, PETSC_NULL, PETSC_NULL, &user.da); CHKERRQ(ierr);
     }
       
-    DAGetMatrix(user.da, MATSEQAIJ, &user.K);
-    DACreateGlobalVector(user.da, &phi);
-    VecDuplicate(phi, &u);
-    VecDuplicate(phi, &G);
-    VecDuplicate(phi, &psi);
-    VecDuplicate(phi, &vec_one);
-    VecDuplicate(phi, &phi2);
-    
-    VecDuplicate(phi, &phi2sum);
-    
-    VecSet(vec_one, (PetscScalar) 1.0);
+    ierr = DACreateGlobalVector(user.da, &phi); CHKERRQ(ierr);
+    ierr = VecDuplicate(phi, &u); CHKERRQ(ierr);
+    ierr = VecDuplicate(phi, &G); CHKERRQ(ierr);
+    ierr = VecDuplicate(phi, &phi_err); CHKERRQ(ierr);
     
     /* Create the eigensolver context */
-    EPSCreate(PETSC_COMM_SELF, &user.eps);
+    ierr = EPSCreate(PETSC_COMM_SELF, &user.eps); CHKERRQ(ierr);
     
-    EPSSetOperators(user.eps, user.K, PETSC_NULL);
-    EPSSetProblemType(user.eps, EPS_HEP);
-    EPSGetST(user.eps, &st);
-    EPSSetDimensions(user.eps, user.epsnum, 5*user.epsnum);
+    ierr = DAGetMatrix(user.da, MATSEQAIJ, &user.K); CHKERRQ(ierr);
+    ierr = EPSSetOperators(user.eps, user.K, PETSC_NULL); CHKERRQ(ierr);
+    ierr = EPSSetProblemType(user.eps, EPS_HEP); CHKERRQ(ierr);
+    ierr = EPSGetST(user.eps, &st); CHKERRQ(ierr);
+    ierr = EPSSetDimensions(user.eps, user.epsnum, 5*user.epsnum); CHKERRQ(ierr);
     
-    STSetType(st, st_type);
-    STSetShift(st, st_shift);
+    ierr = STSetType(st, st_type); CHKERRQ(ierr);
+    ierr = STSetShift(st, st_shift); CHKERRQ(ierr);
     
-    STGetKSP(st, &eps_ksp);
-    KSPGetPC(eps_ksp, &eps_pc);
+    ierr = STGetKSP(st, &eps_ksp); CHKERRQ(ierr);
+    ierr = KSPGetPC(eps_ksp, &eps_pc); CHKERRQ(ierr);
     
-    PCSetType(eps_pc, PCICC);
-    KSPSetType(eps_ksp, KSPCG);
+    ierr = PCSetType(eps_pc, PCICC); CHKERRQ(ierr);
+    ierr = KSPSetType(eps_ksp, KSPCG); CHKERRQ(ierr);
     
-    STSetFromOptions(st);
-    EPSSetFromOptions(user.eps);
+    ierr = STSetFromOptions(st); CHKERRQ(ierr);
+    ierr = EPSSetFromOptions(user.eps); CHKERRQ(ierr);
     
-    if (!restart){
-        InitPhiRandom(user, phi);
-        VecScale(phi, (PetscScalar) 1.0 / (PetscScalar) numprocs);
-//        SimplexInteriorProjection(user, phi);
-        SimplexProjection2(user, phi);
-//        sprintf(filename, "%s%.3d%s", phi_prfx, myrank, txtsfx);
-//        VecView_TXT(phi, filename);
-    } else {
-        sprintf(filename, "%s%.3d%s", phi_prfx, myrank, txtsfx);
-        VecRead_TXT(phi, filename);
-    }
+    // Initializes PHI
+    ierr = InitPhiRandom(user, phi); CHKERRQ(ierr);
+    ierr = VecScale(phi, (PetscScalar) 1.0 / (PetscScalar) numprocs); CHKERRQ(ierr);
+//    ierr = SimplexInteriorProjection(user, phi); CHKERRQ(ierr);
+    ierr = SimplexProjection2(user, phi); CHKERRQ(ierr);
     
-    
-	// Save .geo and .case file
-	/*
-    if (!myrank){
-        DAView_GEOASCII(user.da, "Partition.geo");	 
-        PetscViewerASCIIOpen(PETSC_COMM_SELF, "Partition.case", &viewer);
-        PetscViewerASCIIPrintf(viewer, "FORMAT\n");
-        PetscViewerASCIIPrintf(viewer, "type:  ensight gold\n");
-        PetscViewerASCIIPrintf(viewer, "GEOMETRY\n");
-        PetscViewerASCIIPrintf(viewer, "model: Partition.geo\n");
-        PetscViewerASCIIPrintf(viewer, "VARIABLE\n");
-        for (i=0; i<numprocs; i++){
-            PetscViewerASCIIPrintf(viewer, "scalar per node: U%i %s%.3d%s\n", i, u_prfx, i, ressfx);
-        }
-        for (i=0; i<numprocs; i++){
-            PetscViewerASCIIPrintf(viewer, "scalar per node: PHI%i %s%.3d%s\n", i, phi_prfx, i, ressfx);
-        }
-        PetscViewerFlush(viewer);
-        PetscViewerDestroy(viewer);
-    }
-    */
+    if (SaveEnsight==PETSC_TRUE) {
+        ierr = InitEnsight(user, u_prfx, phi_prfx, res_sfx); CHKERRQ(ierr);
+    }    
     
     F = 0.0;
     Fold = 0.0;
     it = 0;
-    PetscPrintf(PETSC_COMM_WORLD, "Iteration %d:\n", it);
-    ComputeLambdaU(user, phi, &lambda, u);
+    ierr = PetscPrintf(PETSC_COMM_WORLD, "Iteration %d:\n", it); CHKERRQ(ierr);
+    ierr = ComputeLambdaU(user, phi, &lambda, u); CHKERRQ(ierr);
     
     MPI_Allreduce(&lambda, &F, 1, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
     
-    error = tol + 1.0;
+    ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD, "Partition.log", &viewer); CHKERRQ(ierr);
+    ierr = PetscViewerASCIIPrintf(viewer, "%d   %e   ", it, F); CHKERRQ(ierr);
+    ierr = PetscViewerASCIISynchronizedPrintf(viewer, "%e   ", lambda); CHKERRQ(ierr);
+    ierr = PetscViewerFlush(viewer); CHKERRQ(ierr);
+    ierr = PetscViewerASCIIPrintf(viewer, "%e \n", tol, it); CHKERRQ(ierr);
     
-    it = 0.0;
-    PetscViewerASCIIOpen(PETSC_COMM_WORLD, "Partition.log", &viewer);
-    PetscViewerASCIIPrintf(viewer, "%d   %e   ", it, F);
-    PetscViewerASCIISynchronizedPrintf(viewer, "%e   ", lambda);
-    PetscViewerFlush(viewer);
-    PetscViewerASCIIPrintf(viewer, "%e \n", tol, it);
     
+    error = tol + 1.0;    
+    it = 0;
     do { 
+//        if ( (error < tol) && (it > 20) ) FirstPass = PETSC_FALSE;
         it++;
         
-        // Update mu linearly between muinit and mufinal in maxit/2 steps, starting from iteration 0
-        //user.mu = PetscMin(muinit + (PetscScalar) (2*it) / (PetscScalar) maxit * (mufinal - muinit), mufinal);
-        		
         Fold = F;
         F = 0.0;
-        PetscPrintf(PETSC_COMM_WORLD, "Iteration %d:\n", it);
+        ierr = PetscPrintf(PETSC_COMM_WORLD, "Iteration %d:\n", it); CHKERRQ(ierr);
+        
+        // Save the previous iteration
+        ierr = VecCopy(phi, phi_err); CHKERRQ(ierr);
         
         // Compute the gradient of the objective function w.r.t. u
-        ComputeG(user, G, u);
+        ierr = ComputeG(user, G, u); CHKERRQ(ierr);
         
         // Update phi
-        VecAXPY(phi, user.step, G);
-        
+        ierr = VecAXPY(phi, user.step, G); CHKERRQ(ierr);
         
         // Project phi onto the simplex \sum_k \phi^k_i=1 for i = 0-nx*ny-1
-        SimplexProjection2(user, phi);
- 
+        if (FirstPass == PETSC_TRUE){
+            ierr = SimplexProjection2(user, phi); CHKERRQ(ierr);
+            ierr = PetscPrintf(PETSC_COMM_WORLD, "*** Using FAST projection\n"); CHKERRQ(ierr);
+        } else {
+            ierr = SimplexProjection(user, phi); CHKERRQ(ierr);
+            ierr = PetscPrintf(PETSC_COMM_WORLD, "*** Using CORRECT projection\n"); CHKERRQ(ierr);
+        } 
         // Compute the distance the simplex:
-        DistanceFromSimplex(&dist, phi);
-        PetscPrintf(PETSC_COMM_WORLD, "   Distance from simplex: %f\n", dist);
+        ierr = DistanceFromSimplex(&dist, phi); CHKERRQ(ierr);
+        ierr = PetscPrintf(PETSC_COMM_WORLD, "   Distance from simplex: %f\n", dist); CHKERRQ(ierr);
+        
+        // Compute the L^\infty error on Phi
+        ierr = VecAXPY(phi_err, -1.0, phi); CHKERRQ(ierr);
+        ierr = VecNorm(phi_err, NORM_INFINITY, &myerror); CHKERRQ(ierr);
+        ierr = PetscGlobalMax(&myerror, &error, PETSC_COMM_WORLD); CHKERRQ(ierr);
 
         //Compute the eigenvalues u associated to the new phi
-        ComputeLambdaU(user, phi, &lambda, u);
+        ierr = ComputeLambdaU(user, phi, &lambda, u); CHKERRQ(ierr);
         
         //compute F= \sum_k lambda^k_epsnum
         MPI_Allreduce(&lambda, &F, 1, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
         
-        
         // Update the step
-
         if (F<=Fold) {
             user.step = user.step * 1.2;
-            user.step = PetscMin(user.step, stepmax);
+            user.step = PetscMin(user.step, user.stepmax);
         } else {
             user.step = user.step / 2.0;
-            user.step = PetscMax(user.step, stepmin);
+            user.step = PetscMax(user.step, user.stepmin);
         }
 
         //Display some stuff
-		PetscPrintf(PETSC_COMM_WORLD, "F = %e, step = %e, error = %e, mu = %e\n\n", F, user.step, error, user.mu);
+		ierr = PetscPrintf(PETSC_COMM_WORLD, "F = %e, step = %e, error = %e, mu = %e\n\n", F, user.step, error, user.mu); CHKERRQ(ierr);
 
         //Save the same stuff in "Partition.log"
-        PetscViewerASCIIPrintf(viewer, "%d   %e   ", it, F);
-        PetscViewerASCIISynchronizedPrintf(viewer, "%e   ", lambda);
-        PetscViewerFlush(viewer);
-        PetscViewerASCIIPrintf(viewer, "%e \n", error, it);
+        ierr = PetscViewerASCIIPrintf(viewer, "%d   %e   ", it, F); CHKERRQ(ierr);
+        ierr = PetscViewerASCIISynchronizedPrintf(viewer, "%e   ", lambda); CHKERRQ(ierr);
+        ierr = PetscViewerFlush(viewer); CHKERRQ(ierr);
+        ierr = PetscViewerASCIIPrintf(viewer, "%e \n", error, it); CHKERRQ(ierr);
       
       
-      
-        // Saves the results
-        if (it%25 == 0){
-            // Save into a new file
-            //sprintf(filename, "%s%.3d-%.5d%s", u_prfx, myrank, it, txtsfx);
-            			 
-            // Reuse the same file over and over
-//            sprintf(filename, "%s%.3d%s", u_prfx, myrank, txtsfx);
-//            VecView_TXT(u, filename);
-               		
-            // Save in VTK format
-            // sprintf(filename, "%s%.3d%s", u_prfx, myrank, vtksfx);
-            // VecView_VTKASCII(u, filename);
-            
-            // Save in ensight gold ASCII format
-//            sprintf(filename, "%s%.3d%s", u_prfx, myrank, ressfx);
-//            VecView_EnsightASCII(u, filename);
-            
-            //sprintf(filename, "%s%.3d-%.5d%s", phi_prfx, myrank, it, txtsfx);
-//            sprintf(filename, "%s%.3d%s", phi_prfx, myrank, txtsfx);
-//            VecView_TXT(phi, filename);
-               		
-            // sprintf(filename, "%s%.3d%s", phi_prfx, myrank, vtksfx);
-            // VecView_VTKASCII(phi, filename);
-            
-            // Save in ensight gold ASCII format
-//            sprintf(filename, "%s%.3d%s", phi_prfx, myrank, ressfx);
-//            VecView_EnsightASCII(phi, filename);
-
-            // Save a composite of all PHI U
-            sprintf(filename, "Partition_Phi_all.txt");
-            VecCopy(phi, phi2);
-            VecScale(phi2, (PetscScalar) myrank+1.0);
-            VecGetArray(phi2, &phi_array);
-            VecGetArray(psi,  &psi_array);            
-            MPI_Allreduce(phi_array, psi_array, N, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
-            VecRestoreArray(phi2, &phi_array);
-            VecRestoreArray(psi,  &psi_array);
-            VecView_TXT(psi, filename);
-
-            sprintf(filename, "Partition_U_all.txt");
-            VecGetArray(u, &phi_array);
-            VecGetArray(psi,  &psi_array);            
-            MPI_Allreduce(phi_array, psi_array, N, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
-            VecRestoreArray(phi2, &phi_array);
-            VecRestoreArray(psi,  &psi_array);
-            VecView_TXT(psi, filename);
-        }
-    } while ( (it < 20 ) || ( ( it < maxit ) && (error > tol) ) );
-   
-    // sprintf(filename, "%s%.3d%s", u_prfx, myrank, vtksfx);
-    // VecView_VTKASCII(u, filename);
-    sprintf(filename, "%s%.3d%s", u_prfx, myrank, txtsfx);
-    VecView_TXT(u, filename);
-    sprintf(filename, "%s%.3d%s", u_prfx, myrank, ressfx);
-    VecView_EnsightASCII(u, filename);
+        if (it%modsave == 0){
+            if (SaveTXT == PETSC_TRUE){
+                sprintf(filename, "%s%.3d%s", u_prfx, myrank, txt_sfx);
+                ierr = VecView_TXT(u, filename); CHKERRQ(ierr);
+                sprintf(filename, "%s%.3d%s", phi_prfx, myrank, txt_sfx);
+                ierr = VecView_TXT(phi, filename); CHKERRQ(ierr);
+            }
+            if (SaveVTK == PETSC_TRUE){
+                sprintf(filename, "%s%.3d%s", u_prfx, myrank, vtk_sfx);
+                ierr = VecView_VTKASCII(u, filename); CHKERRQ(ierr);
+                sprintf(filename, "%s%.3d%s", phi_prfx, myrank, vtk_sfx);
+                ierr = VecView_VTKASCII(phi, filename); CHKERRQ(ierr);
+            }
+            if (SaveEnsight == PETSC_TRUE){
+                sprintf(filename, "%s%.3d%s", u_prfx, myrank, res_sfx);
+                ierr = VecView_EnsightASCII(u, filename); CHKERRQ(ierr);
+                sprintf(filename, "%s%.3d%s", phi_prfx, myrank, res_sfx);
+                ierr = VecView_EnsightASCII(phi, filename); CHKERRQ(ierr);
+            }
+            if (SaveComposite == PETSC_TRUE){
+                sprintf(filename, "Partition_Phi_all.txt");
+                ierr = SaveComposite_Phi(phi, filename); CHKERRQ(ierr);
     
-    // sprintf(filename, "%s%.3d%s", phi_prfx, myrank, vtksfx);
-    // VecView_VTKASCII(phi, filename);
-    sprintf(filename, "%s%.3d%s", phi_prfx, myrank, txtsfx);
-    VecView_TXT(phi, filename);
-    sprintf(filename, "%s%.3d%s", phi_prfx, myrank, ressfx);
-    VecView_EnsightASCII(phi, filename);
-      
+                sprintf(filename, "Partition_U_all.txt");
+                ierr = SaveComposite_U(u, filename); CHKERRQ(ierr);
+            }
+        }
+
+        if ( (error < tol) && (it > 20) && (FirstPass == PETSC_TRUE) && (TwoPass == PETSC_TRUE) ){
+            FirstPass = PETSC_FALSE;
+            it = 0;
+        } 
+
+    } while ( (it < 20 ) || ( ( it < maxit ) && (error > tol) ) );
+
+    if (SaveTXT == PETSC_TRUE){
+        sprintf(filename, "%s%.3d%s", u_prfx, myrank, txt_sfx);
+        ierr = VecView_TXT(u, filename); CHKERRQ(ierr);
+        sprintf(filename, "%s%.3d%s", phi_prfx, myrank, txt_sfx);
+        ierr = VecView_TXT(phi, filename); CHKERRQ(ierr);
+    }
+    if (SaveVTK == PETSC_TRUE){
+        sprintf(filename, "%s%.3d%s", u_prfx, myrank, vtk_sfx);
+        ierr = VecView_VTKASCII(u, filename); CHKERRQ(ierr);
+        sprintf(filename, "%s%.3d%s", phi_prfx, myrank, vtk_sfx);
+        ierr = VecView_VTKASCII(phi, filename); CHKERRQ(ierr);
+    }
+    if (SaveEnsight == PETSC_TRUE){
+        sprintf(filename, "%s%.3d%s", u_prfx, myrank, res_sfx);
+        ierr = VecView_EnsightASCII(u, filename); CHKERRQ(ierr);
+        sprintf(filename, "%s%.3d%s", phi_prfx, myrank, res_sfx);
+        ierr = VecView_EnsightASCII(phi, filename); CHKERRQ(ierr);
+    }
+    if (SaveComposite == PETSC_TRUE){
+        sprintf(filename, "Partition_Phi_all.txt");
+        ierr = SaveComposite_Phi(phi, filename); CHKERRQ(ierr);
+
+        sprintf(filename, "Partition_U_all.txt");
+        ierr = SaveComposite_U(u, filename); CHKERRQ(ierr);
+    }
+   
     // Be nice and deallocate
-    VecDestroy(phi2);
-    VecDestroy(phi2sum);
     VecDestroy(phi);
-    VecDestroy(psi);
+    VecDestroy(phi_err);
     VecDestroy(u);
     VecDestroy(G);
+    
     MatDestroy(user.K);
     DADestroy(user.da);	 
     EPSDestroy(user.eps);
@@ -358,6 +353,59 @@ int main (int argc, char ** argv) {
     PetscViewerDestroy(viewer);
     
     SlepcFinalize();
+}
+
+#undef __FUNCT__
+#define __FUNCT__ "SaveComposite_Phi"
+PetscErrorCode SaveComposite_Phi(Vec phi, const char filename[]){
+    PetscErrorCode ierr;
+    Vec            psi, phi2;
+    PetscMPIInt    myrank;
+    PetscScalar    *phi_array, *psi_array;
+    int            N;
+    
+    PetscFunctionBegin;
+    
+    MPI_Comm_rank(PETSC_COMM_WORLD, &myrank);
+    ierr = VecGetSize(phi, &N); CHKERRQ(ierr);
+    ierr = VecDuplicate(phi, &psi); CHKERRQ(ierr);
+    ierr = VecDuplicate(phi, &phi2); CHKERRQ(ierr);
+
+    ierr = VecCopy(phi, phi2); CHKERRQ(ierr);
+    ierr = VecScale(phi2, (PetscScalar) myrank+1.0); CHKERRQ(ierr);
+    ierr = VecGetArray(phi2, &phi_array); CHKERRQ(ierr);
+    ierr = VecGetArray(psi,  &psi_array); CHKERRQ(ierr);            
+    MPI_Allreduce(phi_array, psi_array, N, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
+    ierr = VecRestoreArray(phi2, &phi_array); CHKERRQ(ierr);
+    ierr = VecRestoreArray(psi,  &psi_array); CHKERRQ(ierr);
+    ierr = VecView_TXT(psi, filename); CHKERRQ(ierr);
+
+    ierr = VecDestroy(psi); CHKERRQ(ierr);
+    ierr = VecDestroy(phi2); CHKERRQ(ierr);
+    PetscFunctionReturn(0);
+}
+
+#undef __FUNCT__
+#define __FUNCT__ "SaveComposite_U"
+PetscErrorCode SaveComposite_U(Vec u, const char filename[]){
+    PetscErrorCode ierr;
+    Vec            psi;
+    PetscScalar    *u_array, *psi_array;
+    int            N;
+    
+    PetscFunctionBegin;
+    ierr = VecGetSize(u, &N); CHKERRQ(ierr);
+    ierr = VecDuplicate(u, &psi); CHKERRQ(ierr);
+
+    ierr = VecGetArray(u, &u_array); CHKERRQ(ierr);
+    ierr = VecGetArray(psi,  &psi_array); CHKERRQ(ierr);            
+    MPI_Allreduce(u_array, psi_array, N, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
+    ierr = VecRestoreArray(u, &u_array); CHKERRQ(ierr);
+    ierr = VecRestoreArray(psi,  &psi_array); CHKERRQ(ierr);
+    ierr = VecView_TXT(psi, filename); CHKERRQ(ierr);
+
+    ierr = VecDestroy(psi); CHKERRQ(ierr);
+    PetscFunctionReturn(0);
 }
 
 
@@ -444,51 +492,30 @@ PetscErrorCode ComputeLambdaU(AppCtx user, Vec phi, PetscScalar *lambda, Vec u){
 }
 
 #undef __FUNCT__
-#define __FUNCT__ "InitPhiQuarter"
-extern PetscErrorCode InitPhiQuarter(AppCtx user, Vec phi){
-    PetscScalar     **local_phi;
-    PetscInt        i, j, mx, my, xm, ym, xs, ys;
-    PetscScalar     zero = 0.0, one	= 1.0;
-    PetscErrorCode  ierr;
-    
-    PetscFunctionBegin;
-    ierr = DAGetCorners(user.da, &xs, &ys, PETSC_NULL, &xm, &ym,PETSC_NULL); CHKERRQ(ierr);
-
-    ierr = VecSet(phi, zero); CHKERRQ(ierr);
-    ierr = DAVecGetArray(user.da, phi, &local_phi); CHKERRQ(ierr);
-    for (j=ys; j<ys+ym; j++){
-        for(i=xs; i<xs+xm; i++){
-            if ( (i < user.nx/2) || (j < user.ny/2) ){
-                local_phi[j][i] = one;
-            }
-        }
-    }
-    ierr = DAVecRestoreArray(user.da, phi, &local_phi); CHKERRQ(ierr);
-    PetscFunctionReturn(0);
-}
-
-#undef __FUNCT__
 #define __FUNCT__ "InitPhiRandom"
 extern PetscErrorCode InitPhiRandom(AppCtx user, Vec phi){
     PetscRandom	   rndm;
     PetscLogDouble tim;
-    PetscMPIInt    rank;
+    PetscMPIInt    rank, size;
     MPI_Comm       comm;
     PetscErrorCode ierr;
     
     PetscFunctionBegin;
     ierr = PetscObjectGetComm((PetscObject) phi, &comm); CHKERRQ(ierr);
-    ierr = MPI_Comm_rank(PETSC_COMM_WORLD, &rank); CHKERRQ(ierr);
+    MPI_Comm_rank(PETSC_COMM_WORLD, &rank);
+    MPI_Comm_size(PETSC_COMM_WORLD, &size);
     
     ierr = PetscRandomCreate(comm, &rndm); CHKERRQ(ierr);
     ierr = PetscRandomSetFromOptions(rndm); CHKERRQ(ierr);
     ierr = PetscGetTime(&tim); CHKERRQ(ierr);
 //    ierr = PetscPrintf(PETSC_COMM_SELF, "Seed is %d\n", (unsigned long) rank*tim); CHKERRQ(ierr);
+//    ierr = PetscRandomSetSeed(rndm, (unsigned long) tim*rank); CHKERRQ(ierr);
     ierr = PetscPrintf(PETSC_COMM_SELF, "Seed is %d\n", (unsigned long) rank*1213585940); CHKERRQ(ierr);
-    ierr = PetscRandomSetSeed(rndm, (unsigned long) tim*rank); CHKERRQ(ierr);
+    ierr = PetscRandomSetSeed(rndm, (unsigned long) rank + 1213585940); CHKERRQ(ierr);
     ierr = PetscRandomSeed(rndm); CHKERRQ(ierr);
     
     ierr = VecSetRandom(phi, rndm); CHKERRQ(ierr);
+//    ierr = VecScale(phi, (PetscScalar) 1.0 / (PetscScalar) size); CHKERRQ(ierr);
     ierr = PetscRandomDestroy(rndm); CHKERRQ(ierr);
     
     PetscFunctionReturn(0);
@@ -501,6 +528,40 @@ extern PetscErrorCode ComputeG(AppCtx user, Vec G, Vec u){
     
     PetscFunctionBegin;
     ierr = VecPointwiseMult(G, u, u); CHKERRQ(ierr);
+    PetscFunctionReturn(0);
+}
+
+#undef __FUNCT__
+#define __FUNCT__ "InitEnsight"
+PetscErrorCode InitEnsight(AppCtx user, const char u_prfx[], const char phi_prfx[], const char res_sfx[]){
+    PetscErrorCode   ierr;
+    MPI_Comm         comm;
+    PetscMPIInt	     rank,numprocs;
+    int              i;
+    PetscViewer      viewer;
+        
+    PetscFunctionBegin;
+    ierr = PetscObjectGetComm((PetscObject) user.da, &comm); CHKERRQ(ierr);
+    ierr = MPI_Comm_rank(comm, &rank); CHKERRQ(ierr);
+    ierr = MPI_Comm_size(comm, &numprocs); CHKERRQ(ierr);
+    if (!rank){
+        ierr = DAView_GEOASCII(user.da, "Partition.geo"); CHKERRQ(ierr);
+        ierr = PetscViewerASCIIOpen(PETSC_COMM_SELF, "Partition.case", &viewer); CHKERRQ(ierr);
+        ierr = PetscViewerASCIIPrintf(viewer, "FORMAT\n"); CHKERRQ(ierr);
+        ierr = PetscViewerASCIIPrintf(viewer, "type:  ensight gold\n"); CHKERRQ(ierr);
+        ierr = PetscViewerASCIIPrintf(viewer, "GEOMETRY\n"); CHKERRQ(ierr);
+        ierr = PetscViewerASCIIPrintf(viewer, "model: Partition.geo\n"); CHKERRQ(ierr);
+        ierr = PetscViewerASCIIPrintf(viewer, "VARIABLE\n"); CHKERRQ(ierr);
+        for (i=0; i<numprocs; i++){
+            ierr = PetscViewerASCIIPrintf(viewer, "scalar per node: U%i %s%.3d%s\n", i, u_prfx, i, res_sfx); CHKERRQ(ierr);
+        }
+        for (i=0; i<numprocs; i++){
+            ierr = PetscViewerASCIIPrintf(viewer, "scalar per node: PHI%i %s%.3d%s\n", i, phi_prfx, i, res_sfx); CHKERRQ(ierr);
+        }
+        ierr = PetscViewerFlush(viewer); CHKERRQ(ierr);
+        ierr = PetscViewerDestroy(viewer); CHKERRQ(ierr);
+    }
+    
     PetscFunctionReturn(0);
 }
 
