@@ -224,8 +224,33 @@ int main (int argc, char ** argv) {
             ierr = PetscPrintf(PETSC_COMM_WORLD, "Switching to EXACT projection\n");; CHKERRQ(ierr);
             FirstPass = PETSC_FALSE;
             FinalPass = PETSC_TRUE;
+
+            if (SaveTXT == PETSC_TRUE){
+                sprintf(filename, "%s%.3d-step1%s", u_prfx, myrank, txt_sfx);
+                ierr = VecView_TXT(u, filename); CHKERRQ(ierr);
+                sprintf(filename, "%s%.3d-step1%s", phi_prfx, myrank, txt_sfx);
+                ierr = VecView_TXT(phi, filename); CHKERRQ(ierr);
+            }
+            if (SaveVTK == PETSC_TRUE){
+                sprintf(filename, "%s%.3d-step1%s", u_prfx, myrank, vtk_sfx);
+                ierr = VecView_VTKASCII(u, filename); CHKERRQ(ierr);
+                sprintf(filename, "%s%.3d-step1%s", phi_prfx, myrank, vtk_sfx);
+                ierr = VecView_VTKASCII(phi, filename); CHKERRQ(ierr);
+            }
+            if (SaveEnsight == PETSC_TRUE){
+                sprintf(filename, "%s%.3d-step1%s", u_prfx, myrank, res_sfx);
+                ierr = VecView_EnsightASCII(u, filename); CHKERRQ(ierr);
+                sprintf(filename, "%s%.3d-step1%s", phi_prfx, myrank, res_sfx);
+                ierr = VecView_EnsightASCII(phi, filename); CHKERRQ(ierr);
+            }
+            if (SaveComposite == PETSC_TRUE){
+                sprintf(filename, "Partition_Phi_all-step1.txt");
+                ierr = SaveComposite_Phi(phi, filename); CHKERRQ(ierr);
+    
+                sprintf(filename, "Partition_U_all-step1.txt");
+                ierr = SaveComposite_U(u, filename); CHKERRQ(ierr);
+            }
         } 
-//        if ( (error < tol) && (it > 20) ) FirstPass = PETSC_FALSE;
         it++;
         
         Fold = F;
@@ -247,7 +272,7 @@ int main (int argc, char ** argv) {
             ierr = PetscPrintf(PETSC_COMM_WORLD, "*** Using FAST projection\n"); CHKERRQ(ierr);
         } else {
             ierr = SimplexProjection(user, phi); CHKERRQ(ierr);
-            ierr = PetscPrintf(PETSC_COMM_WORLD, "*** Using CORRECT projection\n"); CHKERRQ(ierr);
+            ierr = PetscPrintf(PETSC_COMM_WORLD, "*** Using EXACT projection\n"); CHKERRQ(ierr);
         } 
         // Compute the distance the simplex:
         ierr = DistanceFromSimplex(&dist, phi); CHKERRQ(ierr);
