@@ -4,7 +4,7 @@ function[U,Phi] = PlotPartitionSimplified()
 %Phi_filename=strcat('Partition_Phi-000-',num2str(iter,'%.5d'),'.txt');
 Phi_filename=strcat('Partition_Phi_all.txt');
 Phi_all=load(Phi_filename);
-U_filename=strcat('Partition_Phi_all.txt');
+U_filename=strcat('Partition_U_all.txt');
 U_all=load(U_filename);
 [nx,ny]=size(Phi_all);
 
