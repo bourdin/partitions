@@ -94,6 +94,7 @@ int main (int argc, char ** argv) {
     PetscLogDouble	eps_ts, eps_tf, eps_t;
     PetscReal       dist;
     PetscTruth      TwoPass;
+    PetscTruth      FinalPass=PETSC_TRUE;
     PetscTruth      FirstPass=PETSC_TRUE;
     
     PetscFunctionBegin;
@@ -150,7 +151,7 @@ int main (int argc, char ** argv) {
 
     TwoPass = PETSC_FALSE;
     ierr = PetscOptionsGetTruth(PETSC_NULL, "-twopass", &TwoPass, PETSC_NULL); CHKERRQ(ierr);
-
+    if (TwoPass == PETSC_TRUE) FinalPass = PETSC_FALSE;
 
     // SOME INITIALIZATIONS
     ierr = PetscPrintf(PETSC_COMM_WORLD, "\nOptimal Partition problem, N=%d (%dx%d grid)\n\n", N, user.nx, user.ny); CHKERRQ(ierr);
@@ -219,6 +220,11 @@ int main (int argc, char ** argv) {
     error = tol + 1.0;    
     it = 0;
     do { 
+        if ( (error < tol) && (it > 20) && (TwoPass == PETSC_TRUE) ){
+            ierr = PetscPrintf(PETSC_COMM_WORLD, "Switching to EXACT projection\n");; CHKERRQ(ierr);
+            FirstPass = PETSC_FALSE;
+            FinalPass = PETSC_TRUE;
+        } 
 //        if ( (error < tol) && (it > 20) ) FirstPass = PETSC_FALSE;
         it++;
         
@@ -305,12 +311,8 @@ int main (int argc, char ** argv) {
             }
         }
 
-        if ( (error < tol) && (it > 20) && (FirstPass == PETSC_TRUE) && (TwoPass == PETSC_TRUE) ){
-            FirstPass = PETSC_FALSE;
-            it = 0;
-        } 
-
-    } while ( (it < 20 ) || ( ( it < maxit ) && (error > tol) ) );
+    // This must be the most convoluted stopping crterion. there HAS to be something better!
+    } while ( (it < 20 ) || ( ( it < maxit ) && ((error > tol) || (FinalPass == PETSC_FALSE)) ) );
 
     if (SaveTXT == PETSC_TRUE){
         sprintf(filename, "%s%.3d%s", u_prfx, myrank, txt_sfx);
