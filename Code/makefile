@@ -1,12 +1,15 @@
-ALL: Partition2DSeq
+ALL: PartitionSimplified 
 
 include ${SLEPC_DIR}/bmake/slepc_common
 
-Partition2DSeq: Partition2DSeq.o  chkopts
-	-${CLINKER} -o Partition2DSeq Partition2DSeq.o ${SLEPC_LIB}
+PartitionMultiLevel: PartitionMultiLevel.o  chkopts
+	-${CLINKER} -o PartitionMultiLevel PartitionMultiLevel.o ${SLEPC_LIB}
 
 PartitionSimplified: PartitionSimplified.o  chkopts
 	-${CLINKER} -o PartitionSimplified PartitionSimplified.o ${SLEPC_LIB}
+
+Partition2DSeq: Partition2DSeq.o  chkopts
+	-${CLINKER} -o Partition2DSeq Partition2DSeq.o ${SLEPC_LIB}
 
 Partition3DSeq: Partition3DSeq.o  chkopts
 	-${CLINKER} -o Partition3DSeq Partition3DSeq.o ${SLEPC_LIB}
