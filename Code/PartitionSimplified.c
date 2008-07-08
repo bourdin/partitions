@@ -30,6 +30,7 @@ typedef struct {
 } AppCtx;
 
 extern PetscErrorCode DistanceFromSimplex(PetscScalar *dist, Vec phi); 
+extern PetscErrorCode ShowComposite_Phi(Vec phi, const char filename[]);
 extern PetscErrorCode SaveComposite_Phi(Vec phi, const char filename[]);
 extern PetscErrorCode SaveComposite_U(Vec u, const char filename[]);
 extern PetscErrorCode ComputeK2d(AppCtx user, Vec phi);
@@ -75,6 +76,7 @@ int main (int argc, char ** argv) {
     PetscTruth      SaveEnsight;
     PetscTruth      SaveComposite;
     int             modsave;
+    PetscTruth      showphi = PETSC_FALSE;
             
     int				N, i, it;
     PetscInt        maxit;
@@ -114,6 +116,7 @@ int main (int argc, char ** argv) {
     
     
     // GET PARAMETERS FROM THE COMMAND LINE
+    ierr = PetscOptionsGetTruth(PETSC_NULL, "-showphi", &showphi, PETSC_NULL);    CHKERRQ(ierr); 
     ierr = PetscOptionsGetTruth(PETSC_NULL, "-3d", &is3d, PETSC_NULL);    CHKERRQ(ierr); 
     if (is3d == PETSC_TRUE){
         user.ndim = 3;
@@ -327,6 +330,9 @@ int main (int argc, char ** argv) {
       
       
         if (it%modsave == 0){
+            if (showphi == PETSC_TRUE) {
+                ierr = ShowComposite_Phi(phi, filename); CHKERRQ(ierr);
+            }                
             if (SaveTXT == PETSC_TRUE){
                 sprintf(filename, "%s%.3d%s", u_prfx, myrank, txt_sfx);
                 ierr = VecView_TXT(u, filename); CHKERRQ(ierr);
@@ -425,6 +431,37 @@ PetscErrorCode SaveComposite_Phi(Vec phi, const char filename[]){
     ierr = VecRestoreArray(psi,  &psi_array); CHKERRQ(ierr);
     ierr = VecView_TXT(psi, filename); CHKERRQ(ierr);
 
+    ierr = VecDestroy(psi); CHKERRQ(ierr);
+    ierr = VecDestroy(phi2); CHKERRQ(ierr);
+    PetscFunctionReturn(0);
+}
+
+#undef __FUNCT__
+#define __FUNCT__ "ShowComposite_Phi"
+PetscErrorCode ShowComposite_Phi(Vec phi, const char filename[]){
+    PetscErrorCode ierr;
+    Vec            psi, phi2;
+    PetscMPIInt    myrank;
+    PetscScalar    *phi_array, *psi_array;
+    int            N;
+    
+    PetscFunctionBegin;
+    
+    MPI_Comm_rank(PETSC_COMM_WORLD, &myrank);
+    ierr = VecGetSize(phi, &N); CHKERRQ(ierr);
+    ierr = VecDuplicate(phi, &psi); CHKERRQ(ierr);
+    ierr = VecDuplicate(phi, &phi2); CHKERRQ(ierr);
+
+    ierr = VecCopy(phi, phi2); CHKERRQ(ierr);
+    ierr = VecScale(phi2, (PetscScalar) myrank+1.0); CHKERRQ(ierr);
+    ierr = VecGetArray(phi2, &phi_array); CHKERRQ(ierr);
+    ierr = VecGetArray(psi,  &psi_array); CHKERRQ(ierr);            
+    MPI_Allreduce(phi_array, psi_array, N, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
+    ierr = VecRestoreArray(phi2, &phi_array); CHKERRQ(ierr);
+    ierr = VecRestoreArray(psi,  &psi_array); CHKERRQ(ierr);
+    if (myrank == 0){    
+        ierr = VecView(psi, PETSC_VIEWER_DRAW_SELF); CHKERRQ(ierr);
+    }
     ierr = VecDestroy(psi); CHKERRQ(ierr);
     ierr = VecDestroy(phi2); CHKERRQ(ierr);
     PetscFunctionReturn(0);
@@ -612,10 +649,10 @@ extern PetscErrorCode InitPhiRandom(AppCtx user, Vec phi){
     ierr = PetscRandomCreate(comm, &rndm); CHKERRQ(ierr);
     ierr = PetscRandomSetFromOptions(rndm); CHKERRQ(ierr);
     ierr = PetscGetTime(&tim); CHKERRQ(ierr);
-//    ierr = PetscPrintf(PETSC_COMM_SELF, "Seed is %d\n", (unsigned long) rank*tim); CHKERRQ(ierr);
-//    ierr = PetscRandomSetSeed(rndm, (unsigned long) tim*rank); CHKERRQ(ierr);
-    ierr = PetscPrintf(PETSC_COMM_SELF, "Seed is %d\n", (unsigned long) rank*1213585940); CHKERRQ(ierr);
-    ierr = PetscRandomSetSeed(rndm, (unsigned long) rank + 1213585940); CHKERRQ(ierr);
+    ierr = PetscPrintf(PETSC_COMM_SELF, "Seed is %d\n", (unsigned long) rank*tim); CHKERRQ(ierr);
+    ierr = PetscRandomSetSeed(rndm, (unsigned long) tim*rank); CHKERRQ(ierr);
+//    ierr = PetscPrintf(PETSC_COMM_SELF, "Seed is %d\n", (unsigned long) rank*1213585940); CHKERRQ(ierr);
+//    ierr = PetscRandomSetSeed(rndm, (unsigned long) rank + 1213585940); CHKERRQ(ierr);
     ierr = PetscRandomSeed(rndm); CHKERRQ(ierr);
     
     ierr = VecSetRandom(phi, rndm); CHKERRQ(ierr);
