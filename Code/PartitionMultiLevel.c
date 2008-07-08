@@ -149,8 +149,8 @@ int main (int argc, char ** argv) {
         N = user.nx*user.ny;
     }
     
-//    user.mu = 1.0e3;
-//    ierr = PetscOptionsGetScalar(PETSC_NULL, "-mu", &user.mu, PETSC_NULL); CHKERRQ(ierr);
+    user.mu = 1.0e3;
+    ierr = PetscOptionsGetScalar(PETSC_NULL, "-mu", &user.mu, PETSC_NULL); CHKERRQ(ierr);
     
     user.step = 10.0;
     ierr = PetscOptionsGetScalar(PETSC_NULL, "-step", &user.step, PETSC_NULL); CHKERRQ(ierr);
@@ -247,7 +247,7 @@ int main (int argc, char ** argv) {
     
     
     for (level=0; level<user.numlevels; level++){
-        user.mu = 1.0 / (PetscReal)(user.nx) / (PetscReal)(user.ny) / (PetscReal)(user.nz);
+//        user.mu = 1.0 / (PetscReal)(user.nx) / (PetscReal)(user.ny) / (PetscReal)(user.nz);
         error = tol + 1.0;    
         it = 0;
         do { 
