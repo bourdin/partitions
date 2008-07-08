@@ -16,22 +16,24 @@ splot 'Partition_Phi_all.txt' matrix with pm3d
 #include "slepceps.h"
 
 typedef struct {
-	 PetscInt		nx, ny;   /* Dimension of the discretized domain */
-	 PetscScalar	mu;	      /* Penalization factor for the computation of the eigenvalue */
-	 PetscTruth		per;	  /* true for periodic boundary conditions, false otherwise */
-	 DA				da;	      /* Information about the distributed layout */
-	 PetscScalar	step;	  /* Initial step of the steepest descent methods */
-	 PetscScalar    stepmin;
-	 PetscScalar    stepmax;
-	 EPS			eps;      /* Eigenvalue solver context */
-	 Mat			K;        /* Matrix for the Laplacian */
-	 PetscInt       epsnum;   /* which eigenvalues are we optimizing */
+    PetscInt    ndim;
+    PetscInt	nx, ny, nz;   /* Dimension of the discretized domain */
+    PetscScalar	mu;	      /* Penalization factor for the computation of the eigenvalue */
+    PetscTruth	per;	  /* true for periodic boundary conditions, false otherwise */
+    DA			da;	      /* Information about the distributed layout */
+    PetscScalar	step;	  /* Initial step of the steepest descent methods */
+    PetscScalar stepmin;
+    PetscScalar stepmax;
+    EPS			eps;      /* Eigenvalue solver context */
+    Mat			K;        /* Matrix for the Laplacian */
+    PetscInt    epsnum;   /* which eigenvalues are we optimizing */
 } AppCtx;
 
 extern PetscErrorCode DistanceFromSimplex(PetscScalar *dist, Vec phi); 
 extern PetscErrorCode SaveComposite_Phi(Vec phi, const char filename[]);
 extern PetscErrorCode SaveComposite_U(Vec u, const char filename[]);
-extern PetscErrorCode ComputeK(AppCtx user, Vec phi);
+extern PetscErrorCode ComputeK2d(AppCtx user, Vec phi);
+extern PetscErrorCode ComputeK3d(AppCtx user, Vec phi);
 extern PetscErrorCode ComputeLambdaU(AppCtx user, Vec phi, PetscScalar *lambda, Vec u);
 extern PetscErrorCode ComputeG(AppCtx user, Vec G, Vec u);
 extern PetscErrorCode InitPhiQuarter(AppCtx user, Vec phi);
@@ -96,6 +98,7 @@ int main (int argc, char ** argv) {
     PetscTruth      TwoPass;
     PetscTruth      FinalPass=PETSC_TRUE;
     PetscTruth      FirstPass=PETSC_TRUE;
+    PetscTruth      is3d     = PETSC_FALSE;
     
     PetscFunctionBegin;
     ierr = SlepcInitialize(&argc, &argv, (char*)0, help); CHKERRQ(ierr);
@@ -111,6 +114,13 @@ int main (int argc, char ** argv) {
     
     
     // GET PARAMETERS FROM THE COMMAND LINE
+    ierr = PetscOptionsGetTruth(PETSC_NULL, "-3d", &is3d, PETSC_NULL);    CHKERRQ(ierr); 
+    if (is3d == PETSC_TRUE){
+        user.ndim = 3;
+    } else {
+        user.ndim = 2;
+    }
+    
     user.epsnum = 1;
     ierr = PetscOptionsGetInt(PETSC_NULL, "-epsnum", &user.epsnum, PETSC_NULL);    CHKERRQ(ierr); 
     maxit = 1000;
@@ -121,8 +131,16 @@ int main (int argc, char ** argv) {
     user.nx = 10;
     ierr = PetscOptionsGetInt(PETSC_NULL, "-nx", &user.nx, PETSC_NULL); CHKERRQ(ierr);
     ierr = PetscOptionsGetInt(PETSC_NULL, "-ny", &user.ny, &flag); CHKERRQ(ierr);
-    if( flag==PETSC_FALSE ) user.ny=user.nx; 
-    N = user.nx*user.ny;
+    if (flag==PETSC_FALSE) user.ny=user.nx; 
+    
+    if (user.ndim==3){
+        ierr = PetscOptionsGetInt(PETSC_NULL, "-nz", &user.nz, &flag); CHKERRQ(ierr);
+        if (flag==PETSC_FALSE) user.nz=user.nx; 
+        N = user.nx*user.ny*user.nz;
+    } else {
+        user.nz = 1;
+        N = user.nx*user.ny;
+    }
     
     user.mu = 1.0e3;
     ierr = PetscOptionsGetScalar(PETSC_NULL, "-mu", &user.mu, PETSC_NULL); CHKERRQ(ierr);
@@ -154,18 +172,18 @@ int main (int argc, char ** argv) {
     if (TwoPass == PETSC_TRUE) FinalPass = PETSC_FALSE;
 
     // SOME INITIALIZATIONS
-    ierr = PetscPrintf(PETSC_COMM_WORLD, "\nOptimal Partition problem, N=%d (%dx%d grid)\n\n", N, user.nx, user.ny); CHKERRQ(ierr);
+    ierr = PetscPrintf(PETSC_COMM_WORLD, "\n%dD Optimal Partition problem, N=%d (%dx%dx%d grid)\n\n", user.ndim, N, user.nx, user.ny, user.nz); CHKERRQ(ierr);
     ierr = PetscLogPrintSummary(MPI_COMM_WORLD,"petsc_log_summary.log"); CHKERRQ(ierr);
     
     if (user.per) {
         ierr = PetscPrintf(PETSC_COMM_WORLD, "Using periodic boundary conditions\n"); CHKERRQ(ierr);
-        ierr = DACreate2d(PETSC_COMM_SELF, DA_XYPERIODIC, DA_STENCIL_STAR, user.nx, user.ny, PETSC_DECIDE, PETSC_DECIDE, 1, 1, PETSC_NULL, PETSC_NULL, &user.da); CHKERRQ(ierr);
+        ierr = DACreate(PETSC_COMM_SELF, user.ndim, DA_XYZPERIODIC, DA_STENCIL_STAR, user.nx, user.ny, user.nz, PETSC_DECIDE, PETSC_DECIDE, PETSC_DECIDE, 1, 1, PETSC_NULL, PETSC_NULL, PETSC_NULL, &user.da); CHKERRQ(ierr);
     }
     else {
         ierr = PetscPrintf(PETSC_COMM_WORLD, "Using non-periodic boundary conditions\n"); CHKERRQ(ierr);
-        ierr = DACreate2d(PETSC_COMM_SELF, DA_NONPERIODIC, DA_STENCIL_STAR, user.nx, user.ny, PETSC_DECIDE, PETSC_DECIDE, 1, 1, PETSC_NULL, PETSC_NULL, &user.da); CHKERRQ(ierr);
+        ierr = DACreate(PETSC_COMM_SELF, user.ndim, DA_NONPERIODIC, DA_STENCIL_STAR, user.nx, user.ny, user.nz, PETSC_DECIDE, PETSC_DECIDE, PETSC_DECIDE, 1, 1, PETSC_NULL, PETSC_NULL, PETSC_NULL, &user.da); CHKERRQ(ierr);
     }
-      
+    
     ierr = DACreateGlobalVector(user.da, &phi); CHKERRQ(ierr);
     ierr = VecDuplicate(phi, &u); CHKERRQ(ierr);
     ierr = VecDuplicate(phi, &G); CHKERRQ(ierr);
@@ -266,7 +284,7 @@ int main (int argc, char ** argv) {
         // Update phi
         ierr = VecAXPY(phi, user.step, G); CHKERRQ(ierr);
         
-        // Project phi onto the simplex \sum_k \phi^k_i=1 for i = 0-nx*ny-1
+        // Project phi onto the simplex \sum_k \phi^k_i=1 for i = 0 : nx*ny*nz-1
         if (FirstPass == PETSC_TRUE){
             ierr = SimplexProjection2(user, phi); CHKERRQ(ierr);
             ierr = PetscPrintf(PETSC_COMM_WORLD, "*** Using FAST projection\n"); CHKERRQ(ierr);
@@ -437,8 +455,8 @@ PetscErrorCode SaveComposite_U(Vec u, const char filename[]){
 
 
 #undef __FUNCT__
-#define __FUNCT__ "ComputeK"
-PetscErrorCode ComputeK(AppCtx user, Vec phi)
+#define __FUNCT__ "ComputeK2d"
+PetscErrorCode ComputeK2d(AppCtx user, Vec phi)
 {
     Mat				 K	 = user.K;
     DA				 da = user.da;
@@ -480,6 +498,58 @@ PetscErrorCode ComputeK(AppCtx user, Vec phi)
 }
 
 #undef __FUNCT__
+#define __FUNCT__ "ComputeK3d"
+PetscErrorCode ComputeK3d(AppCtx user, Vec phi)
+{
+    Mat				 K	 = user.K;
+    DA				 da = user.da;
+    PetscErrorCode   ierr;
+    PetscInt		 i, j, k, xm, ym, zm, xs, ys, zs;
+    PetscScalar	     v[7],Hx,Hy,Hz, HyHzdHx, HxHzdHy, HxHydHz ;
+    MatStencil		 row,col[7];
+    PetscScalar	     ***local_phi;
+    
+    PetscFunctionBegin;
+    ierr = DAVecGetArray(user.da, phi, &local_phi); CHKERRQ(ierr);
+   
+    Hx = 1.0 / (PetscReal)(user.nx-1); 
+    Hy = 1.0 / (PetscReal)(user.ny-1);
+    Hz = 1.0 / (PetscReal)(user.nz-1);
+    HyHzdHx = Hy*Hz/Hx;
+    HxHzdHy = Hx*Hz/Hy;
+    HxHydHz = Hx*Hy/Hz;
+    
+    ierr = DAGetCorners(da, &xs, &ys, &zs, &xm, &ym, &zm); CHKERRQ(ierr);
+
+    for (k=zs; k<zs+zm; k++){
+        for (j=ys; j<ys+ym; j++){
+            for(i=xs; i<xs+xm; i++){
+                row.i = i; row.j = j; row.k=k;
+                if ( (!user.per) && (i==0 || j==0 || k==0 || i==user.nx-1 || j==user.ny-1 || k==user.nz-1)){
+                    v[0]  = 2.0*(HyHzdHx + HxHzdHy + HxHydHz);
+                    v[0] += user.mu * (1.0 - local_phi[k][j][i]);
+                    ierr = MatSetValuesStencil(K, 1, &row, 1, &row, v, INSERT_VALUES); CHKERRQ(ierr);
+                } else {
+                    v[0]  = -HxHydHz;                          col[0].i = i;   col[0].j = j;   col[0].k = k-1;
+                    v[1]  = -HxHzdHy;                          col[1].i = i;   col[1].j = j-1; col[1].k = k;
+                    v[2]  = -HyHzdHx;                          col[2].i = i-1; col[2].j = j;   col[2].k = k;
+                    v[3]  = 2.0*(HyHzdHx + HxHzdHy + HxHydHz); col[3].i = i;   col[3].j = j;   col[3].k = k;
+                    v[3] += user.mu * (1.0 - local_phi[k][j][i])*Hx*Hy;
+                    v[4]  = -HyHzdHx;                          col[4].i = i+1; col[4].j = j;   col[4].k = k;
+                    v[5]  = -HxHzdHy;                          col[5].i = i;   col[5].j = j+1; col[5].k = k;
+                    v[6]  = -HxHydHz;                          col[6].i = i;   col[6].j = j;   col[6].k = k+1;
+                    ierr = MatSetValuesStencil(K, 1 ,&row, 7, col, v, INSERT_VALUES); CHKERRQ(ierr);
+                }
+            }
+        }
+    }
+    ierr = DAVecRestoreArray(user.da, phi, &local_phi); CHKERRQ(ierr);
+    ierr = MatAssemblyBegin(K, MAT_FINAL_ASSEMBLY); CHKERRQ(ierr);
+    ierr = MatAssemblyEnd  (K, MAT_FINAL_ASSEMBLY); CHKERRQ(ierr);
+    PetscFunctionReturn(0);
+}
+
+#undef __FUNCT__
 #define __FUNCT__ "ComputeLambdaU"
 PetscErrorCode ComputeLambdaU(AppCtx user, Vec phi, PetscScalar *lambda, Vec u){
     PetscLogDouble	  eps_ts, eps_tf, eps_t;
@@ -493,7 +563,11 @@ PetscErrorCode ComputeLambdaU(AppCtx user, Vec phi, PetscScalar *lambda, Vec u){
     PetscFunctionBegin;
     MPI_Comm_rank(PETSC_COMM_WORLD, &myrank);
     
-    ierr = ComputeK(user, phi); CHKERRQ(ierr);
+    if (user.ndim == 2){
+        ierr = ComputeK2d(user, phi); CHKERRQ(ierr);
+    } else {
+        ierr = ComputeK3d(user, phi); CHKERRQ(ierr);
+    }
     ierr = EPSSetOperators(user.eps, user.K, PETSC_NULL); CHKERRQ(ierr);
     ierr = PetscGetTime(&eps_ts); CHKERRQ(ierr);
     ierr = EPSSolve(user.eps); CHKERRQ(ierr);
@@ -511,8 +585,11 @@ PetscErrorCode ComputeLambdaU(AppCtx user, Vec phi, PetscScalar *lambda, Vec u){
     ierr = VecScale(u, normu); CHKERRQ(ierr);
     
     ierr = VecDestroy(ui); CHKERRQ(ierr);
-    
-    *lambda = *lambda * (PetscReal)(user.nx-1) * (PetscReal)(user.ny-1) / 2.0; 
+    if (user.ndim==2){
+        *lambda = *lambda * (PetscReal)(user.nx-1) * (PetscReal)(user.ny-1) / 2.0; 
+    } else {
+        *lambda = *lambda * (PetscReal)(user.nx-1) * (PetscReal)(user.ny-1) * (PetscReal)( user.nz - 1) / 2.0; 
+    }
     ierr = PetscSynchronizedPrintf(PETSC_COMM_WORLD, "        lambda[%d] = %e    EPSSolve converged in %f s for %d iterations\n", myrank, *lambda, eps_t, its); CHKERRQ(ierr);
     ierr = PetscSynchronizedFlush(PETSC_COMM_WORLD); CHKERRQ(ierr);
     PetscFunctionReturn(0);
@@ -549,7 +626,7 @@ extern PetscErrorCode InitPhiRandom(AppCtx user, Vec phi){
 }
 
 #undef __FUNCT__
-#define __FUNCT__ "Computeg"
+#define __FUNCT__ "ComputeG"
 extern PetscErrorCode ComputeG(AppCtx user, Vec G, Vec u){
     PetscErrorCode   ierr;
     
@@ -752,8 +829,6 @@ PetscErrorCode VecView_VTKASCII(Vec x, const char filename[])
     PetscViewer        viewer;
     PetscScalar        *array, *values;
     PetscInt           n, N, maxn, mx, my, mz, dof;
-    PetscInt           xs, xm, ys, ym;
-    PetscInt           i, p;
     MPI_Status         status;
     PetscMPIInt        rank, size, tag;
     PetscErrorCode     ierr;
@@ -761,44 +836,44 @@ PetscErrorCode VecView_VTKASCII(Vec x, const char filename[])
     const char         *name;
 
     PetscFunctionBegin;
-    ierr = PetscObjectGetComm((PetscObject) x, &comm);CHKERRQ(ierr);
-    ierr = MPI_Comm_rank(comm, &rank);CHKERRQ(ierr);
-    ierr = MPI_Comm_size(comm, &size);CHKERRQ(ierr);
+    ierr = PetscObjectGetComm((PetscObject) x, &comm); CHKERRQ(ierr);
+    ierr = MPI_Comm_rank(comm, &rank); CHKERRQ(ierr);
+    ierr = MPI_Comm_size(comm, &size); CHKERRQ(ierr);
     
     ierr = VecGetSize(x, &N); CHKERRQ(ierr);
     ierr = VecGetLocalSize(x, &n); CHKERRQ(ierr);
-    ierr = PetscObjectQuery((PetscObject) x, "DA", (PetscObject *) &da);CHKERRQ(ierr);
+    ierr = PetscObjectQuery((PetscObject) x, "DA", (PetscObject *) &da); CHKERRQ(ierr);
     if (!da) SETERRQ(PETSC_ERR_ARG_WRONG,"Vector not generated from a DA");
     
-    ierr = DAGetInfo(da, 0, &mx, &my, &mz,0,0,0, &dof,0,0,0);CHKERRQ(ierr);
+    ierr = DAGetInfo(da, 0, &mx, &my, &mz,0,0,0, &dof,0,0,0); CHKERRQ(ierr);
     if (dof!=1) SETERRQ(PETSC_ERR_ARG_WRONG,"dof>1 not implemented yet");
     
     
-    ierr = PetscObjectGetName((PetscObject)x,&name);
-    ierr = VecGetArray(x, &array);CHKERRQ(ierr);
-    ierr = DACreateNaturalVector(da,&natural);CHKERRQ(ierr);
-    ierr = DAGlobalToNaturalBegin(da,x,INSERT_VALUES,natural);CHKERRQ(ierr);
-    ierr = DAGlobalToNaturalEnd(da,x,INSERT_VALUES,natural);CHKERRQ(ierr);
-    ierr = VecScatterCreateToZero(natural, &ScatterToZero, &master);CHKERRQ(ierr);
-    ierr = VecScatterBegin(ScatterToZero,natural,master,INSERT_VALUES,SCATTER_FORWARD);CHKERRQ(ierr);
-    ierr = VecScatterEnd(ScatterToZero,natural,master,INSERT_VALUES,SCATTER_FORWARD);CHKERRQ(ierr);
+    ierr = PetscObjectGetName((PetscObject)x,&name); CHKERRQ(ierr);
+    ierr = VecGetArray(x, &array); CHKERRQ(ierr);
+    ierr = DACreateNaturalVector(da,&natural); CHKERRQ(ierr);
+    ierr = DAGlobalToNaturalBegin(da,x,INSERT_VALUES,natural); CHKERRQ(ierr);
+    ierr = DAGlobalToNaturalEnd(da,x,INSERT_VALUES,natural); CHKERRQ(ierr);
+    ierr = VecScatterCreateToZero(natural, &ScatterToZero, &master); CHKERRQ(ierr);
+    ierr = VecScatterBegin(ScatterToZero,natural,master,INSERT_VALUES,SCATTER_FORWARD); CHKERRQ(ierr);
+    ierr = VecScatterEnd(ScatterToZero,natural,master,INSERT_VALUES,SCATTER_FORWARD); CHKERRQ(ierr);
     
     if (!rank) {
-        ierr = PetscViewerASCIIOpen(PETSC_COMM_SELF, filename, &viewer);CHKERRQ(ierr);
-        ierr = PetscViewerASCIIPrintf(viewer, "# vtk DataFile Version 2.0\n");CHKERRQ(ierr);
-        ierr = PetscViewerASCIIPrintf(viewer, "%s\n",name);CHKERRQ(ierr);
-        ierr = PetscViewerASCIIPrintf(viewer, "ASCII\n");CHKERRQ(ierr);
+        ierr = PetscViewerASCIIOpen(PETSC_COMM_SELF, filename, &viewer); CHKERRQ(ierr);
+        ierr = PetscViewerASCIIPrintf(viewer, "# vtk DataFile Version 2.0\n"); CHKERRQ(ierr);
+        ierr = PetscViewerASCIIPrintf(viewer, "%s\n",name); CHKERRQ(ierr);
+        ierr = PetscViewerASCIIPrintf(viewer, "ASCII\n"); CHKERRQ(ierr);
         
         /* Todo: get coordinates of nodes */
-        ierr = PetscViewerASCIIPrintf(viewer, "DATASET STRUCTURED_POINTS\n");CHKERRQ(ierr);
-        ierr = PetscViewerASCIIPrintf(viewer, "DIMENSIONS %d %d %d\n", mx, my, mz);CHKERRQ(ierr);
-        ierr = PetscViewerASCIIPrintf(viewer, "POINT_DATA %d\n", N);CHKERRQ(ierr);
-        ierr = PetscViewerASCIIPrintf(viewer, "SCALARS VecView_VTK float 1\n");CHKERRQ(ierr);
-        ierr = PetscViewerASCIIPrintf(viewer, "LOOKUP_TABLE default\n");CHKERRQ(ierr);
+        ierr = PetscViewerASCIIPrintf(viewer, "DATASET STRUCTURED_POINTS\n"); CHKERRQ(ierr);
+        ierr = PetscViewerASCIIPrintf(viewer, "DIMENSIONS %d %d %d\n", mx, my, mz); CHKERRQ(ierr);
+        ierr = PetscViewerASCIIPrintf(viewer, "POINT_DATA %d\n", N); CHKERRQ(ierr);
+        ierr = PetscViewerASCIIPrintf(viewer, "SCALARS VecView_VTK float 1\n"); CHKERRQ(ierr);
+        ierr = PetscViewerASCIIPrintf(viewer, "LOOKUP_TABLE default\n"); CHKERRQ(ierr);
         
-        ierr = VecView(master, viewer);CHKERRQ(ierr);
-        ierr = PetscViewerFlush(viewer);CHKERRQ(ierr);
-        ierr = PetscViewerDestroy(viewer);CHKERRQ(ierr);
+        ierr = VecView(master, viewer); CHKERRQ(ierr);
+        ierr = PetscViewerFlush(viewer); CHKERRQ(ierr);
+        ierr = PetscViewerDestroy(viewer); CHKERRQ(ierr);
     }  
     
     PetscFunctionReturn(0);
@@ -892,10 +967,10 @@ PetscErrorCode VecView_EnsightASCII(Vec x, const char filename[]){
     if (!rank){
         ierr = PetscViewerASCIIOpen(PETSC_COMM_SELF, filename, &viewer); CHKERRQ(ierr);
         
-        ierr = PetscViewerASCIIPrintf(viewer, "%s\n",name);CHKERRQ(ierr);
-        ierr = PetscViewerASCIIPrintf(viewer, "part\n");CHKERRQ(ierr);
-        ierr = PetscViewerASCIIPrintf(viewer, "%10d\n", 1);CHKERRQ(ierr);
-        ierr = PetscViewerASCIIPrintf(viewer, "block\n");CHKERRQ(ierr);
+        ierr = PetscViewerASCIIPrintf(viewer, "%s\n",name); CHKERRQ(ierr);
+        ierr = PetscViewerASCIIPrintf(viewer, "part\n"); CHKERRQ(ierr);
+        ierr = PetscViewerASCIIPrintf(viewer, "%10d\n", 1); CHKERRQ(ierr);
+        ierr = PetscViewerASCIIPrintf(viewer, "block\n"); CHKERRQ(ierr);
         
         for(i=0; i<N; i++){
             ierr = PetscViewerASCIIPrintf(viewer, "%12.5e\n", PetscRealPart(io_array[i])); CHKERRQ(ierr);
@@ -986,32 +1061,33 @@ PetscErrorCode SimplexProjection(AppCtx user, Vec phi)
     PetscMPIInt       *I, *n;
     Vec               psi;
     PetscScalar       *psi_array, *phi_array;
-    PetscInt          l, i;
+    PetscInt          l, i, N;
     PetscMPIInt		  myrank, numprocs;
     PetscErrorCode    ierr;
     
     PetscFunctionBegin;
     MPI_Comm_rank(PETSC_COMM_WORLD, &myrank);
     MPI_Comm_size(PETSC_COMM_WORLD, &numprocs);
+    ierr = VecGetSize(phi, &N); CHKERRQ(ierr);
     
     ierr = VecDuplicate(phi, &psi); CHKERRQ(ierr);
     ierr = VecGetArray(psi, &psi_array); CHKERRQ(ierr);
     ierr = VecGetArray(phi, &phi_array); CHKERRQ(ierr);
     
-    ierr = PetscMalloc(user.nx*user.ny*sizeof(PetscMPIInt), &I); CHKERRQ(ierr);
-    ierr = PetscMalloc(user.nx*user.ny*sizeof(PetscMPIInt), &n); CHKERRQ(ierr);
-    for (i=0; i<user.nx*user.ny; i++) I[i] = 0;
+    ierr = PetscMalloc(N*sizeof(PetscMPIInt), &I); CHKERRQ(ierr);
+    ierr = PetscMalloc(N*sizeof(PetscMPIInt), &n); CHKERRQ(ierr);
+    for (i=0; i<N; i++) I[i] = 0;
     
     for (l=0; l<numprocs; l++){
-        for (i=0; i<user.nx*user.ny; i++){
+        for (i=0; i<N; i++){
             if (I[i]) phi_array[i] = 0.0;
         }
-        MPI_Allreduce(phi_array, psi_array, user.nx * user.ny, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
-        MPI_Allreduce(I, n, user.nx * user.ny, MPI_INT, MPI_SUM, PETSC_COMM_WORLD);
-        for (i=0; i<user.nx*user.ny; i++){
+        MPI_Allreduce(phi_array, psi_array, N, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
+        MPI_Allreduce(I, n, N, MPI_INT, MPI_SUM, PETSC_COMM_WORLD);
+        for (i=0; i<N; i++){
             if (numprocs - n[i]) phi_array[i] = phi_array[i]- (PetscScalar) (1-I[i]) * (psi_array[i]-1.0) / (PetscScalar) (numprocs - n[i]);     
         }
-        for (i=0; i<user.nx*user.ny; i++){
+        for (i=0; i<N; i++){
             if (phi_array[i] <0.0) {
             I[i]  = 1;
                 phi_array[i]= (PetscScalar) 0.0;
