@@ -188,7 +188,11 @@ int main (int argc, char ** argv) {
     
     if (user.per) {
         ierr = PetscPrintf(PETSC_COMM_WORLD, "Using periodic boundary conditions\n"); CHKERRQ(ierr);
-        ierr = DACreate(PETSC_COMM_SELF, user.ndim, DA_XYZPERIODIC, DA_STENCIL_STAR, user.nx, user.ny, user.nz, PETSC_DECIDE, PETSC_DECIDE, PETSC_DECIDE, 1, 1, PETSC_NULL, PETSC_NULL, PETSC_NULL, &user.da); CHKERRQ(ierr);
+	if (user.ndim == 2) {
+            ierr = DACreate2d(PETSC_COMM_SELF, DA_XYPERIODIC, DA_STENCIL_STAR, user.nx, user.ny, PETSC_DECIDE, PETSC_DECIDE, 1, 1, PETSC_NULL, PETSC_NULL, &user.da); CHKERRQ(ierr);
+	} else {
+	    ierr = DACreate3d(PETSC_COMM_SELF, DA_XYZPERIODIC, DA_STENCIL_STAR, user.nx, user.ny, user.nz, PETSC_DECIDE, PETSC_DECIDE, PETSC_DECIDE, 1, 1, PETSC_NULL, PETSC_NULL, PETSC_NULL, &user.da); CHKERRQ(ierr);
+	}
     }
     else {
         ierr = PetscPrintf(PETSC_COMM_WORLD, "Using non-periodic boundary conditions\n"); CHKERRQ(ierr);
@@ -422,21 +426,19 @@ int main (int argc, char ** argv) {
             
             // Create a temporary DA for the interpolation
             if (user.per) {
-                ierr = DACreate(PETSC_COMM_SELF, user.ndim, DA_XYZPERIODIC, DA_STENCIL_STAR, user.nx, user.ny, user.nz, PETSC_DECIDE, PETSC_DECIDE, PETSC_DECIDE, 1, 1, PETSC_NULL, PETSC_NULL, PETSC_NULL, &dac); CHKERRQ(ierr);
+        	if (user.ndim == 2) {
+                    ierr = DACreate2d(PETSC_COMM_SELF, DA_XYPERIODIC, DA_STENCIL_STAR, user.nx, user.ny, PETSC_DECIDE, PETSC_DECIDE, 1, 1, PETSC_NULL, PETSC_NULL, &dac); CHKERRQ(ierr);
+		} else {
+		    ierr = DACreate3d(PETSC_COMM_SELF, DA_XYZPERIODIC, DA_STENCIL_STAR, user.nx, user.ny, user.nz, PETSC_DECIDE, PETSC_DECIDE, PETSC_DECIDE, 1, 1, PETSC_NULL, PETSC_NULL, PETSC_NULL, &dac); CHKERRQ(ierr);
+		}
             } else {
                 ierr = DACreate(PETSC_COMM_SELF, user.ndim, DA_NONPERIODIC, DA_STENCIL_STAR, user.nx, user.ny, user.nz, PETSC_DECIDE, PETSC_DECIDE, PETSC_DECIDE, 1, 1, PETSC_NULL, PETSC_NULL, PETSC_NULL, &dac); CHKERRQ(ierr);
             }
             
-            // Compute the dimensions of the new domain
-            user.nx = 2*user.nx - 1;
-            user.ny = 2*user.ny - 1;
-            if ( user.ndim == 3) user.nz = 2*user.nz - 1;
-            if (user.per) {
-                ierr = DACreate(PETSC_COMM_SELF, user.ndim, DA_XYZPERIODIC, DA_STENCIL_STAR, user.nx, user.ny, user.nz, PETSC_DECIDE, PETSC_DECIDE, PETSC_DECIDE, 1, 1, PETSC_NULL, PETSC_NULL, PETSC_NULL, &user.da); CHKERRQ(ierr);
-            } else {
-                ierr = DACreate(PETSC_COMM_SELF, user.ndim, DA_NONPERIODIC, DA_STENCIL_STAR, user.nx, user.ny, user.nz, PETSC_DECIDE, PETSC_DECIDE, PETSC_DECIDE, 1, 1, PETSC_NULL, PETSC_NULL, PETSC_NULL, &user.da); CHKERRQ(ierr);
-            }
-            
+	    // Refine the DA and get the new sizes
+	    ierr = DARefine(dac, PETSC_COMM_SELF, &user.da); CHKERRQ(ierr);
+	    ierr = DAGetInfo(user.da, 0, &user.nx, &user.ny, &user.nz, 0, 0, 0, 0, 0, 0, 0); CHKERRQ(ierr);
+   
             // Create the interpolation matrix K
             ierr = DAGetInterpolation(dac, user.da, &user.K, 0); CHKERRQ(ierr);
             
