@@ -517,9 +517,6 @@ PetscErrorCode SaveComposite_Phi(Vec phi, const char filename[]){
     ierr = VecRestoreArray(phi2, &phi_array); CHKERRQ(ierr);
     ierr = VecRestoreArray(psi,  &psi_array); CHKERRQ(ierr);
     ierr = VecView_TXT(psi, filename); CHKERRQ(ierr);
-if (myrank ==0){    
-ierr = VecView(psi, PETSC_VIEWER_DRAW_SELF); CHKERRQ(ierr);
-}
     ierr = VecDestroy(psi); CHKERRQ(ierr);
     ierr = VecDestroy(phi2); CHKERRQ(ierr);
     PetscFunctionReturn(0);
