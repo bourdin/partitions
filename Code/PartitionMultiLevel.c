@@ -40,7 +40,7 @@ extern PetscErrorCode ComputeLambdaU(AppCtx user, Vec phi, PetscScalar *lambda, 
 extern PetscErrorCode ComputeG(AppCtx user, Vec G, Vec u);
 extern PetscErrorCode InitPhiQuarter(AppCtx user, Vec phi);
 extern PetscErrorCode InitPhiRandom(AppCtx user, Vec phi);
-extern PetscErrorCode InitEnsight(AppCtx user, const char u_prfx[], const char phi_prfx[], const char res_sfx[]);
+extern PetscErrorCode InitEnsight(AppCtx user, const char u_prfx[], const char phi_prfx[], const char res_sfx[], int level);
 extern PetscErrorCode VecView_TXT(Vec x, const char filename[]);
 extern PetscErrorCode VecView_RAW(Vec x, const char filename[]);
 extern PetscErrorCode VecView_VTKASCII(Vec x, const char filename[]);
@@ -231,10 +231,6 @@ int main (int argc, char ** argv) {
 //    ierr = SimplexInteriorProjection(user, phi); CHKERRQ(ierr);
     ierr = SimplexProjection2(user, phi); CHKERRQ(ierr);
     
-    if (SaveEnsight==PETSC_TRUE) {
-        ierr = InitEnsight(user, u_prfx, phi_prfx, res_sfx); CHKERRQ(ierr);
-    }    
-    
     F = 0.0;
     Fold = 0.0;
     it = 0;
@@ -251,7 +247,9 @@ int main (int argc, char ** argv) {
     
     
     for (level=0; level<user.numlevels; level++){
-//        user.mu = 1.0 / (PetscReal)(user.nx) / (PetscReal)(user.ny) / (PetscReal)(user.nz);
+        if (SaveEnsight==PETSC_TRUE) {
+            ierr = InitEnsight(user, u_prfx, phi_prfx, res_sfx, level); CHKERRQ(ierr);
+        }    
         error = tol + 1.0;    
         it = 0;
         do { 
@@ -763,30 +761,33 @@ extern PetscErrorCode ComputeG(AppCtx user, Vec G, Vec u){
 
 #undef __FUNCT__
 #define __FUNCT__ "InitEnsight"
-PetscErrorCode InitEnsight(AppCtx user, const char u_prfx[], const char phi_prfx[], const char res_sfx[]){
+PetscErrorCode InitEnsight(AppCtx user, const char u_prfx[], const char phi_prfx[], const char res_sfx[], int level){
     PetscErrorCode   ierr;
     MPI_Comm         comm;
     PetscMPIInt	     rank,numprocs;
     int              i;
     PetscViewer      viewer;
+    char			 filename [ FILENAME_MAX ];
+
         
     PetscFunctionBegin;
-    ierr = PetscObjectGetComm((PetscObject) user.da, &comm); CHKERRQ(ierr);
-    ierr = MPI_Comm_rank(comm, &rank); CHKERRQ(ierr);
-    ierr = MPI_Comm_size(comm, &numprocs); CHKERRQ(ierr);
+    ierr = MPI_Comm_rank(PETSC_COMM_WORLD, &rank); CHKERRQ(ierr);
+    ierr = MPI_Comm_size(PETSC_COMM_WORLD, &numprocs); CHKERRQ(ierr);
     if (!rank){
-        ierr = DAView_GEOASCII(user.da, "Partition.geo"); CHKERRQ(ierr);
-        ierr = PetscViewerASCIIOpen(PETSC_COMM_SELF, "Partition.case", &viewer); CHKERRQ(ierr);
+        sprintf(filename, "Partition-level%i.geo", level);
+        ierr = DAView_GEOASCII(user.da, filename); CHKERRQ(ierr);
+        sprintf(filename, "Partition-level%i.case", level);
+        ierr = PetscViewerASCIIOpen(PETSC_COMM_SELF, filename, &viewer); CHKERRQ(ierr);
         ierr = PetscViewerASCIIPrintf(viewer, "FORMAT\n"); CHKERRQ(ierr);
         ierr = PetscViewerASCIIPrintf(viewer, "type:  ensight gold\n"); CHKERRQ(ierr);
         ierr = PetscViewerASCIIPrintf(viewer, "GEOMETRY\n"); CHKERRQ(ierr);
-        ierr = PetscViewerASCIIPrintf(viewer, "model: Partition.geo\n"); CHKERRQ(ierr);
+        ierr = PetscViewerASCIIPrintf(viewer, "model: Partition-level%i.geo\n", level); CHKERRQ(ierr);
         ierr = PetscViewerASCIIPrintf(viewer, "VARIABLE\n"); CHKERRQ(ierr);
         for (i=0; i<numprocs; i++){
-            ierr = PetscViewerASCIIPrintf(viewer, "scalar per node: U%i %s%.3d%s\n", i, u_prfx, i, res_sfx); CHKERRQ(ierr);
+            ierr = PetscViewerASCIIPrintf(viewer, "scalar per node: U%i %s%.3d-level%i%s\n", i, u_prfx, i, level, res_sfx); CHKERRQ(ierr);
         }
         for (i=0; i<numprocs; i++){
-            ierr = PetscViewerASCIIPrintf(viewer, "scalar per node: PHI%i %s%.3d%s\n", i, phi_prfx, i, res_sfx); CHKERRQ(ierr);
+            ierr = PetscViewerASCIIPrintf(viewer, "scalar per node: PHI%i %s%.3d-level%i%s\n", i, phi_prfx, i, level, res_sfx); CHKERRQ(ierr);
         }
         ierr = PetscViewerFlush(viewer); CHKERRQ(ierr);
         ierr = PetscViewerDestroy(viewer); CHKERRQ(ierr);
