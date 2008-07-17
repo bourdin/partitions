@@ -105,9 +105,13 @@ int main (int argc, char ** argv) {
     int             level = 0;
     DA              dac;
     PetscReal       step;
+    int            stages[2];
     
     PetscFunctionBegin;
     ierr = SlepcInitialize(&argc, &argv, (char*)0, help); CHKERRQ(ierr);
+    
+    ierr = PetscLogStageRegister(&stage[0], "Eigensolver"); CHKERRQ(ierr)
+    ierr = PetscLogStageRegister(&stage[1], "I/O"); CHKERRQ(ierr)
     
     MPI_Comm_size(PETSC_COMM_WORLD, &numprocs);
     MPI_Comm_rank(PETSC_COMM_WORLD, &myrank);
@@ -234,7 +238,10 @@ int main (int argc, char ** argv) {
     F = 0.0;
     Fold = 0.0;
     it = 0;
+    
+    ierr = PetscLogStagePush(stages[0]); CHKERRQ(ierr);
     ierr = ComputeLambdaU(user, phi, &lambda, u); CHKERRQ(ierr);
+    ierr = PetscLogStagePop(); CHKERRQ(ierr);
     
     MPI_Allreduce(&lambda, &F, 1, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
     
@@ -245,10 +252,12 @@ int main (int argc, char ** argv) {
     ierr = PetscViewerFlush(viewer); CHKERRQ(ierr);
     ierr = PetscViewerASCIIPrintf(viewer, "%e \n", tol, it); CHKERRQ(ierr);
     
-    
     for (level=0; level<user.numlevels; level++){
         if (SaveEnsight==PETSC_TRUE) {
+            ierr = PetscLogStagePush(stages[1]); CHKERRQ(ierr);
             ierr = InitEnsight(user, u_prfx, phi_prfx, res_sfx, level); CHKERRQ(ierr);
+                ierr = PetscLogStagePop(); CHKERRQ(ierr);
+
         }    
         error = tol + 1.0;    
         it = 0;
@@ -258,6 +267,7 @@ int main (int argc, char ** argv) {
                 FirstPass = PETSC_FALSE;
                 FinalPass = PETSC_TRUE;
     
+                ierr = PetscLogStagePush(stages[1]); CHKERRQ(ierr);
                 if (SaveTXT == PETSC_TRUE){
                     sprintf(filename, "%s%.3d-level%d-step1%s", u_prfx, myrank, level, txt_sfx);
                     ierr = VecView_TXT(u, filename); CHKERRQ(ierr);
@@ -283,7 +293,10 @@ int main (int argc, char ** argv) {
                     sprintf(filename, "Partition_U_all-level%d-step1.txt", level);
                     ierr = SaveComposite_U(u, filename); CHKERRQ(ierr);
                 }
+                ierr = PetscLogStagePop(); CHKERRQ(ierr);
             } 
+
+
             it++;
             
             Fold = F;
@@ -317,8 +330,10 @@ int main (int argc, char ** argv) {
             ierr = PetscGlobalMax(&myerror, &error, PETSC_COMM_WORLD); CHKERRQ(ierr);
     
             //Compute the eigenvalues u associated to the new phi
+            ierr = PetscLogStagePush(stages[0]); CHKERRQ(ierr);
             ierr = ComputeLambdaU(user, phi, &lambda, u); CHKERRQ(ierr);
-            
+            ierr = PetscLogStagePop(); CHKERRQ(ierr);
+    
             //compute F= \sum_k lambda^k_epsnum
             MPI_Allreduce(&lambda, &F, 1, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
             
@@ -345,6 +360,7 @@ int main (int argc, char ** argv) {
                 if (showphi == PETSC_TRUE) {
                     ierr = ShowComposite_Phi(phi, filename); CHKERRQ(ierr);
                 }                
+                ierr = PetscLogStagePush(stages[1]); CHKERRQ(ierr);
                 if (SaveTXT == PETSC_TRUE){
                     sprintf(filename, "%s%.3d-level%d%s", u_prfx, myrank, level, txt_sfx);
                     ierr = VecView_TXT(u, filename); CHKERRQ(ierr);
@@ -370,11 +386,13 @@ int main (int argc, char ** argv) {
                     sprintf(filename, "Partition_U_all-level%d.txt", level);
                     ierr = SaveComposite_U(u, filename); CHKERRQ(ierr);
                 }
+                ierr = PetscLogStagePop(); CHKERRQ(ierr);
             }
     
         // This must be the most convoluted stopping crterion. there HAS to be something better!
         } while ( (it < 20 ) || ( ( it < maxit ) && ((error > tol) || (FinalPass == PETSC_FALSE)) ) );
     
+        ierr = PetscLogStagePush(stages[1]); CHKERRQ(ierr);
         if (SaveTXT == PETSC_TRUE){
             sprintf(filename, "%s%.3d-level%d%s", u_prfx, myrank, level, txt_sfx);
             ierr = VecView_TXT(u, filename); CHKERRQ(ierr);
@@ -400,6 +418,8 @@ int main (int argc, char ** argv) {
             sprintf(filename, "Partition_U_all-level%d.txt", level);
             ierr = SaveComposite_U(u, filename); CHKERRQ(ierr);
         }
+        ierr = PetscLogStagePop(); CHKERRQ(ierr);
+        
         /* 
         Refine the grid and interpolate
         */
