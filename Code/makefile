@@ -1,6 +1,6 @@
 ALL: PartitionSimplified 
-
 include ${SLEPC_DIR}/bmake/slepc_common
+CFLAGS="-O3 -xW"
 
 PartitionMultiLevel: PartitionMultiLevel.o  chkopts
 	-${CLINKER} -o PartitionMultiLevel PartitionMultiLevel.o ${SLEPC_LIB}
