@@ -110,8 +110,8 @@ int main (int argc, char ** argv) {
     PetscFunctionBegin;
     ierr = SlepcInitialize(&argc, &argv, (char*)0, help); CHKERRQ(ierr);
     
-    ierr = PetscLogStageRegister(&stage[0], "Eigensolver"); CHKERRQ(ierr)
-    ierr = PetscLogStageRegister(&stage[1], "I/O"); CHKERRQ(ierr)
+    ierr = PetscLogStageRegister(&stages[0], "Eigensolver"); CHKERRQ(ierr)
+    ierr = PetscLogStageRegister(&stages[1], "I/O"); CHKERRQ(ierr)
     
     MPI_Comm_size(PETSC_COMM_WORLD, &numprocs);
     MPI_Comm_rank(PETSC_COMM_WORLD, &myrank);
