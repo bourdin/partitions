@@ -727,6 +727,7 @@ extern PetscErrorCode InitPhiRandom(AppCtx user, Vec phi){
     PetscMPIInt    rank, size;
     MPI_Comm       comm;
     PetscErrorCode ierr;
+    unsigned long  seed;
     
     PetscFunctionBegin;
     ierr = PetscObjectGetComm((PetscObject) phi, &comm); CHKERRQ(ierr);
@@ -736,10 +737,11 @@ extern PetscErrorCode InitPhiRandom(AppCtx user, Vec phi){
     ierr = PetscRandomCreate(comm, &rndm); CHKERRQ(ierr);
     ierr = PetscRandomSetFromOptions(rndm); CHKERRQ(ierr);
     ierr = PetscGetTime(&tim); CHKERRQ(ierr);
-    ierr = PetscPrintf(PETSC_COMM_SELF, "Seed is %d\n", (unsigned long) rank*tim); CHKERRQ(ierr);
-    ierr = PetscRandomSetSeed(rndm, (unsigned long) tim*rank); CHKERRQ(ierr);
-//    ierr = PetscPrintf(PETSC_COMM_SELF, "Seed is %d\n", (unsigned long) rank*1213585940); CHKERRQ(ierr);
-//    ierr = PetscRandomSetSeed(rndm, (unsigned long) rank + 1213585940); CHKERRQ(ierr);
+    seed = (unsigned long) rank * (unsigned long) tim;
+    //    ierr = PetscPrintf(PETSC_COMM_SELF, "Seed is %d\n", (unsigned long) rank*tim); CHKERRQ(ierr);
+    //    ierr = PetscRandomSetSeed(rndm, (unsigned long) tim*rank); CHKERRQ(ierr);
+    ierr = PetscPrintf(PETSC_COMM_SELF, "Seed is %d\n", seed); CHKERRQ(ierr);
+    ierr = PetscRandomSetSeed(rndm, seed); CHKERRQ(ierr);
     ierr = PetscRandomSeed(rndm); CHKERRQ(ierr);
     
     ierr = VecSetRandom(phi, rndm); CHKERRQ(ierr);
