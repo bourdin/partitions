@@ -1,4 +1,4 @@
-static char help[] = "Compute a partition minimizing the sum of the first eigenvalue of each component in 2D\n\n";
+static char help[] = "Compute a partition minimizing the sum of the first eigenvalue of each component in 2 or 3D\n\n";
 
 /*
 The matrix is scaled by a factor 2*hx*hy
@@ -640,6 +640,7 @@ extern PetscErrorCode InitPhiRandom(AppCtx user, Vec phi){
     PetscMPIInt    rank, size;
     MPI_Comm       comm;
     PetscErrorCode ierr;
+    unsigned long  seed;
     
     PetscFunctionBegin;
     ierr = PetscObjectGetComm((PetscObject) phi, &comm); CHKERRQ(ierr);
@@ -649,10 +650,10 @@ extern PetscErrorCode InitPhiRandom(AppCtx user, Vec phi){
     ierr = PetscRandomCreate(comm, &rndm); CHKERRQ(ierr);
     ierr = PetscRandomSetFromOptions(rndm); CHKERRQ(ierr);
     ierr = PetscGetTime(&tim); CHKERRQ(ierr);
-    ierr = PetscPrintf(PETSC_COMM_SELF, "Seed is %d\n", (unsigned long) rank*tim); CHKERRQ(ierr);
-    ierr = PetscRandomSetSeed(rndm, (unsigned long) tim*rank); CHKERRQ(ierr);
-//    ierr = PetscPrintf(PETSC_COMM_SELF, "Seed is %d\n", (unsigned long) rank*1213585940); CHKERRQ(ierr);
-//    ierr = PetscRandomSetSeed(rndm, (unsigned long) rank + 1213585940); CHKERRQ(ierr);
+    seed = (unsigned long) (rank +1) * (unsigned long) tim;
+    ierr = PetscSynchronizedPrintf(PETSC_COMM_WORLD, "[%i] Seed is %d\n", rank, seed); CHKERRQ(ierr);
+    ierr = PetscSynchronizedFlush(PETSC_COMM_WORLD); CHKERRQ(ierr);
+    ierr = PetscRandomSetSeed(rndm, seed); CHKERRQ(ierr);
     ierr = PetscRandomSeed(rndm); CHKERRQ(ierr);
     
     ierr = VecSetRandom(phi, rndm); CHKERRQ(ierr);

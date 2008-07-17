@@ -1,4 +1,4 @@
-static char help[] = "Compute a partition minimizing the sum of the first eigenvalue of each component in 2D\n\n";
+static char help[] = "Compute a partition minimizing the sum of the first eigenvalue of each component in 2 or 3D\n\n";
 
 /*
 The matrix is scaled by a factor 2*hx*hy
