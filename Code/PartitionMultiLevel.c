@@ -524,7 +524,6 @@ PetscErrorCode SaveComposite_Phi(Vec phi, const char filename[]){
     int            N;
     
     PetscFunctionBegin;
-    
     MPI_Comm_rank(PETSC_COMM_WORLD, &myrank);
     ierr = VecGetSize(phi, &N); CHKERRQ(ierr);
     ierr = VecDuplicate(phi, &psi); CHKERRQ(ierr);
@@ -537,7 +536,9 @@ PetscErrorCode SaveComposite_Phi(Vec phi, const char filename[]){
     MPI_Allreduce(phi_array, psi_array, N, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
     ierr = VecRestoreArray(phi2, &phi_array); CHKERRQ(ierr);
     ierr = VecRestoreArray(psi,  &psi_array); CHKERRQ(ierr);
-    ierr = VecView_TXT(psi, filename); CHKERRQ(ierr);
+    if (!myrank){
+        ierr = VecView_TXT(psi, filename); CHKERRQ(ierr);
+    }
     ierr = VecDestroy(psi); CHKERRQ(ierr);
     ierr = VecDestroy(phi2); CHKERRQ(ierr);
     PetscFunctionReturn(0);
@@ -553,7 +554,6 @@ PetscErrorCode ShowComposite_Phi(Vec phi, const char filename[]){
     int            N;
     
     PetscFunctionBegin;
-    
     MPI_Comm_rank(PETSC_COMM_WORLD, &myrank);
     ierr = VecGetSize(phi, &N); CHKERRQ(ierr);
     ierr = VecDuplicate(phi, &psi); CHKERRQ(ierr);
@@ -566,7 +566,8 @@ PetscErrorCode ShowComposite_Phi(Vec phi, const char filename[]){
     MPI_Allreduce(phi_array, psi_array, N, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
     ierr = VecRestoreArray(phi2, &phi_array); CHKERRQ(ierr);
     ierr = VecRestoreArray(psi,  &psi_array); CHKERRQ(ierr);
-    if (myrank == 0){    
+    
+    if (!myrank){    
         ierr = VecView(psi, PETSC_VIEWER_DRAW_SELF); CHKERRQ(ierr);
     }
     ierr = VecDestroy(psi); CHKERRQ(ierr);
@@ -581,8 +582,10 @@ PetscErrorCode SaveComposite_U(Vec u, const char filename[]){
     Vec            psi;
     PetscScalar    *u_array, *psi_array;
     int            N;
+    PetscMPIInt    myrank;
     
     PetscFunctionBegin;
+    MPI_Comm_rank(PETSC_COMM_WORLD, &myrank);
     ierr = VecGetSize(u, &N); CHKERRQ(ierr);
     ierr = VecDuplicate(u, &psi); CHKERRQ(ierr);
 
@@ -591,8 +594,9 @@ PetscErrorCode SaveComposite_U(Vec u, const char filename[]){
     MPI_Allreduce(u_array, psi_array, N, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
     ierr = VecRestoreArray(u, &u_array); CHKERRQ(ierr);
     ierr = VecRestoreArray(psi,  &psi_array); CHKERRQ(ierr);
-    ierr = VecView_TXT(psi, filename); CHKERRQ(ierr);
-
+    if (!myrank){
+        ierr = VecView_TXT(psi, filename); CHKERRQ(ierr);
+    }
     ierr = VecDestroy(psi); CHKERRQ(ierr);
     PetscFunctionReturn(0);
 }
@@ -852,6 +856,7 @@ PetscErrorCode VecView_TXT(Vec x, const char filename[]){
     ierr = VecScatterDestroy(tozero); CHKERRQ(ierr);
     ierr = VecDestroy(natural); CHKERRQ(ierr);
     
+/*
     ierr = VecGetArray(io, &io_array); CHKERRQ(ierr);	  
     
     if (!rank){
@@ -869,6 +874,13 @@ PetscErrorCode VecView_TXT(Vec x, const char filename[]){
         ierr = PetscViewerDestroy(viewer); CHKERRQ(ierr);
     }
     ierr = VecRestoreArray(io, &io_array); CHKERRQ(ierr);		
+*/    
+    if (!rank){
+        ierr = PetscViewerASCIIOpen(PETSC_COMM_SELF, filename, &viewer); CHKERRQ(ierr);
+        ierr = VecView(io, viewer); CHKERRQ(ierr);
+        ierr = PetscViewerFlush(viewer); CHKERRQ(ierr);
+    }
+    
     ierr = VecDestroy(io); CHKERRQ(ierr);
     PetscFunctionReturn(0);
 }
