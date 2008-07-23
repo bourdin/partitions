@@ -188,6 +188,7 @@ int main (int argc, char ** argv) {
 
     // SOME INITIALIZATIONS
     ierr = PetscPrintf(PETSC_COMM_WORLD, "\n%dD Optimal Partition problem, N=%d (%dx%dx%d grid)\n\n", user.ndim, N, user.nx, user.ny, user.nz); CHKERRQ(ierr);
+    ierr = PetscLogPrintDetailed(MPI_COMM_WORLD,"petsc_log_detailed.log"); CHKERRQ(ierr);
     ierr = PetscLogPrintSummary(MPI_COMM_WORLD,"petsc_log_summary.log"); CHKERRQ(ierr);
     
     if (user.per) {
@@ -252,6 +253,7 @@ int main (int argc, char ** argv) {
     ierr = PetscViewerFlush(viewer); CHKERRQ(ierr);
     ierr = PetscViewerASCIIPrintf(viewer, "%e \n", tol, it); CHKERRQ(ierr);
     
+    ierr = PetscLogBegin(); CHKERRQ(ierr);
     for (level=0; level<user.numlevels; level++){
         if (SaveEnsight==PETSC_TRUE) {
             ierr = PetscLogStagePush(stages[1]); CHKERRQ(ierr);
@@ -508,8 +510,9 @@ int main (int argc, char ** argv) {
     EPSDestroy(user.eps);
     
     // Same informations on the run (including command line options)
-    PetscLogPrintSummary(MPI_COMM_WORLD,"petsc_log_summary.log");		
-    PetscViewerDestroy(viewer);
+    ierr = PetscLogPrintDetailed(MPI_COMM_WORLD,"petsc_log_detailed.log"); CHKERRQ(ierr);
+    ierr = PetscLogPrintSummary(MPI_COMM_WORLD,"petsc_log_summary.log"); CHKERRQ(ierr);
+    ierr = PetscViewerDestroy(viewer); CHKERRQ(ierr);
     
     SlepcFinalize();
 }
@@ -856,7 +859,7 @@ PetscErrorCode VecView_TXT(Vec x, const char filename[]){
     ierr = VecScatterDestroy(tozero); CHKERRQ(ierr);
     ierr = VecDestroy(natural); CHKERRQ(ierr);
     
-/*
+
     ierr = VecGetArray(io, &io_array); CHKERRQ(ierr);	  
     
     if (!rank){
@@ -874,13 +877,14 @@ PetscErrorCode VecView_TXT(Vec x, const char filename[]){
         ierr = PetscViewerDestroy(viewer); CHKERRQ(ierr);
     }
     ierr = VecRestoreArray(io, &io_array); CHKERRQ(ierr);		
-*/    
+
+    /*
     if (!rank){
         ierr = PetscViewerASCIIOpen(PETSC_COMM_SELF, filename, &viewer); CHKERRQ(ierr);
         ierr = VecView(io, viewer); CHKERRQ(ierr);
         ierr = PetscViewerFlush(viewer); CHKERRQ(ierr);
     }
-    
+    */
     ierr = VecDestroy(io); CHKERRQ(ierr);
     PetscFunctionReturn(0);
 }
