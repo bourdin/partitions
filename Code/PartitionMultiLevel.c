@@ -861,7 +861,6 @@ PetscErrorCode VecView_TXT(Vec x, const char filename[]){
     
 
     ierr = VecGetArray(io, &io_array); CHKERRQ(ierr);	  
-    
     if (!rank){
         ierr = PetscViewerASCIIOpen(PETSC_COMM_SELF, filename, &viewer); CHKERRQ(ierr);
         for (k=0; k<mz; k++){
@@ -883,6 +882,7 @@ PetscErrorCode VecView_TXT(Vec x, const char filename[]){
         ierr = PetscViewerASCIIOpen(PETSC_COMM_SELF, filename, &viewer); CHKERRQ(ierr);
         ierr = VecView(io, viewer); CHKERRQ(ierr);
         ierr = PetscViewerFlush(viewer); CHKERRQ(ierr);
+        ierr = PetscViewerDestroy(viewer); CHKERRQ(ierr);
     }
     */
     ierr = VecDestroy(io); CHKERRQ(ierr);
