@@ -32,8 +32,10 @@ typedef struct {
 
 extern PetscErrorCode DistanceFromSimplex(PetscScalar *dist, Vec phi); 
 extern PetscErrorCode ShowComposite_Phi(Vec phi, const char filename[]);
-extern PetscErrorCode SaveComposite_Phi(Vec phi, const char filename[]);
-extern PetscErrorCode SaveComposite_U(Vec u, const char filename[]);
+extern PetscErrorCode SaveComposite_Phi_TXT(Vec phi, const char filename[]);
+extern PetscErrorCode SaveComposite_U_TXT(Vec u, const char filename[]);
+extern PetscErrorCode SaveComposite_Phi_Ensight(Vec phi, const char filename[]);
+extern PetscErrorCode SaveComposite_U_Ensight(Vec u, const char filename[]);
 extern PetscErrorCode ComputeK2d(AppCtx user, Vec phi);
 extern PetscErrorCode ComputeK3d(AppCtx user, Vec phi);
 extern PetscErrorCode ComputeLambdaU(AppCtx user, Vec phi, PetscScalar *lambda, Vec u);
@@ -75,7 +77,6 @@ int main (int argc, char ** argv) {
     PetscTruth      SaveTXT;
     PetscTruth      SaveVTK;
     PetscTruth      SaveEnsight;
-    PetscTruth      SaveComposite;
     int             modsave;
     PetscTruth      showphi = PETSC_FALSE;
             
@@ -167,14 +168,12 @@ int main (int argc, char ** argv) {
     user.per = PETSC_FALSE;
     ierr = PetscOptionsGetTruth(PETSC_NULL, "-periodic", &user.per, PETSC_NULL); CHKERRQ(ierr);
     
-    SaveTXT = PETSC_FALSE;
+    SaveTXT = PETSC_TRUE;
     ierr = PetscOptionsGetTruth(PETSC_NULL, "-saveTXT", &SaveTXT, PETSC_NULL); CHKERRQ(ierr);
     SaveVTK = PETSC_FALSE;
     ierr = PetscOptionsGetTruth(PETSC_NULL, "-saveVTK", &SaveVTK, PETSC_NULL); CHKERRQ(ierr);
     SaveEnsight = PETSC_FALSE;
     ierr = PetscOptionsGetTruth(PETSC_NULL, "-saveEnsight", &SaveEnsight, PETSC_NULL); CHKERRQ(ierr);
-    SaveComposite = PETSC_TRUE;
-    ierr = PetscOptionsGetTruth(PETSC_NULL, "-saveComposite", &SaveComposite, PETSC_NULL); CHKERRQ(ierr);
 
     modsave = 25;
     ierr = PetscOptionsGetInt(PETSC_NULL,   "-modsave", &modsave, PETSC_NULL); CHKERRQ(ierr);
@@ -273,6 +272,10 @@ int main (int argc, char ** argv) {
                     ierr = VecView_TXT(u, filename); CHKERRQ(ierr);
                     sprintf(filename, "%s%.3d-level%d-step1%s", phi_prfx, myrank, level, txt_sfx);
                     ierr = VecView_TXT(phi, filename); CHKERRQ(ierr);
+                    sprintf(filename, "Partition_Phi_all-level%d-step1.txt", level);
+                    ierr = SaveComposite_Phi_TXT(phi, filename); CHKERRQ(ierr);
+                    sprintf(filename, "Partition_U_all-level%d-step1.txt", level);
+                    ierr = SaveComposite_U_TXT(u, filename); CHKERRQ(ierr);
                 }
                 if (SaveVTK == PETSC_TRUE){
                     sprintf(filename, "%s%.3d-level%d-step1%s", u_prfx, myrank, level, vtk_sfx);
@@ -285,13 +288,10 @@ int main (int argc, char ** argv) {
                     ierr = VecView_EnsightASCII(u, filename); CHKERRQ(ierr);
                     sprintf(filename, "%s%.3d-level%d-step1%s", phi_prfx, myrank, level, res_sfx);
                     ierr = VecView_EnsightASCII(phi, filename); CHKERRQ(ierr);
-                }
-                if (SaveComposite == PETSC_TRUE){
-                    sprintf(filename, "Partition_Phi_all-level%d-step1.txt", level);
-                    ierr = SaveComposite_Phi(phi, filename); CHKERRQ(ierr);
-        
-                    sprintf(filename, "Partition_U_all-level%d-step1.txt", level);
-                    ierr = SaveComposite_U(u, filename); CHKERRQ(ierr);
+                    sprintf(filename, "Partition_Phi_all-level%d-step1%s", level, res_sfx);
+                    ierr = SaveComposite_Phi_Ensight(phi, filename); CHKERRQ(ierr);
+                    sprintf(filename, "Partition_U_all-level%d-step1%s", level, res_sfx);
+                    ierr = SaveComposite_U_Ensight(u, filename); CHKERRQ(ierr);
                 }
                 ierr = PetscLogStagePop(); CHKERRQ(ierr);
             } 
@@ -366,6 +366,10 @@ int main (int argc, char ** argv) {
                     ierr = VecView_TXT(u, filename); CHKERRQ(ierr);
                     sprintf(filename, "%s%.3d-level%d%s", phi_prfx, myrank, level, txt_sfx);
                     ierr = VecView_TXT(phi, filename); CHKERRQ(ierr);
+                    sprintf(filename, "Partition_Phi_all-level%d-step1.txt", level);
+                    ierr = SaveComposite_Phi_TXT(phi, filename); CHKERRQ(ierr);
+                    sprintf(filename, "Partition_U_all-level%d-step1.txt", level);
+                    ierr = SaveComposite_U_TXT(u, filename); CHKERRQ(ierr);
                 }
                 if (SaveVTK == PETSC_TRUE){
                     sprintf(filename, "%s%.3d-level%d%s", u_prfx, myrank, level, vtk_sfx);
@@ -378,12 +382,10 @@ int main (int argc, char ** argv) {
                     ierr = VecView_EnsightASCII(u, filename); CHKERRQ(ierr);
                     sprintf(filename, "%s%.3d-level%d%s", phi_prfx, myrank, level, res_sfx);
                     ierr = VecView_EnsightASCII(phi, filename); CHKERRQ(ierr);
-                }
-                if (SaveComposite == PETSC_TRUE){
-                    sprintf(filename, "Partition_Phi_all-level%d.txt", level);
-                    ierr = SaveComposite_Phi(phi, filename); CHKERRQ(ierr);
-                    sprintf(filename, "Partition_U_all-level%d.txt", level);
-                    ierr = SaveComposite_U(u, filename); CHKERRQ(ierr);
+                    sprintf(filename, "Partition_Phi_all-level%d-step1%s", level, res_sfx);
+                    ierr = SaveComposite_Phi_Ensight(phi, filename); CHKERRQ(ierr);
+                    sprintf(filename, "Partition_U_all-level%d-step1%s", level, res_sfx);
+                    ierr = SaveComposite_U_Ensight(u, filename); CHKERRQ(ierr);
                 }
                 ierr = PetscLogStagePop(); CHKERRQ(ierr);
             }
@@ -397,6 +399,10 @@ int main (int argc, char ** argv) {
             ierr = VecView_TXT(u, filename); CHKERRQ(ierr);
             sprintf(filename, "%s%.3d-level%d%s", phi_prfx, myrank, level, txt_sfx);
             ierr = VecView_TXT(phi, filename); CHKERRQ(ierr);
+            sprintf(filename, "Partition_Phi_all-level%d-step1.txt", level);
+            ierr = SaveComposite_Phi_TXT(phi, filename); CHKERRQ(ierr);
+            sprintf(filename, "Partition_U_all-level%d-step1.txt", level);
+            ierr = SaveComposite_U_TXT(u, filename); CHKERRQ(ierr);
         }
         if (SaveVTK == PETSC_TRUE){
             sprintf(filename, "%s%.3d-level%d%s", u_prfx, myrank, level, vtk_sfx);
@@ -409,12 +415,10 @@ int main (int argc, char ** argv) {
             ierr = VecView_EnsightASCII(u, filename); CHKERRQ(ierr);
             sprintf(filename, "%s%.3d-level%d%s", phi_prfx, myrank, level, res_sfx);
             ierr = VecView_EnsightASCII(phi, filename); CHKERRQ(ierr);
-        }
-        if (SaveComposite == PETSC_TRUE){
-            sprintf(filename, "Partition_Phi_all-level%d.txt", level);
-            ierr = SaveComposite_Phi(phi, filename); CHKERRQ(ierr);
-            sprintf(filename, "Partition_U_all-level%d.txt", level);
-            ierr = SaveComposite_U(u, filename); CHKERRQ(ierr);
+            sprintf(filename, "Partition_Phi_all-level%d-step1%s", level, res_sfx);
+            ierr = SaveComposite_Phi_Ensight(phi, filename); CHKERRQ(ierr);
+            sprintf(filename, "Partition_U_all-level%d-step1%s", level, res_sfx);
+            ierr = SaveComposite_U_Ensight(u, filename); CHKERRQ(ierr);
         }
         ierr = PetscLogStagePop(); CHKERRQ(ierr);
         
@@ -511,11 +515,12 @@ int main (int argc, char ** argv) {
     ierr = PetscViewerDestroy(viewer); CHKERRQ(ierr);
     
     SlepcFinalize();
+    return 0;
 }
 
 #undef __FUNCT__
-#define __FUNCT__ "SaveComposite_Phi"
-PetscErrorCode SaveComposite_Phi(Vec phi, const char filename[]){
+#define __FUNCT__ "SaveComposite_Phi_TXT"
+PetscErrorCode SaveComposite_Phi_TXT(Vec phi, const char filename[]){
     PetscErrorCode ierr;
     Vec            psi, phi2;
     PetscMPIInt    myrank;
@@ -537,6 +542,36 @@ PetscErrorCode SaveComposite_Phi(Vec phi, const char filename[]){
     ierr = VecRestoreArray(psi,  &psi_array); CHKERRQ(ierr);
     if (!myrank){
         ierr = VecView_TXT(psi, filename); CHKERRQ(ierr);
+    }
+    ierr = VecDestroy(psi); CHKERRQ(ierr);
+    ierr = VecDestroy(phi2); CHKERRQ(ierr);
+    PetscFunctionReturn(0);
+}
+
+#undef __FUNCT__
+#define __FUNCT__ "SaveComposite_Phi_Ensight"
+PetscErrorCode SaveComposite_Phi_Ensight(Vec phi, const char filename[]){
+    PetscErrorCode ierr;
+    Vec            psi, phi2;
+    PetscMPIInt    myrank;
+    PetscScalar    *phi_array, *psi_array;
+    int            N;
+    
+    PetscFunctionBegin;
+    MPI_Comm_rank(PETSC_COMM_WORLD, &myrank);
+    ierr = VecGetSize(phi, &N); CHKERRQ(ierr);
+    ierr = VecDuplicate(phi, &psi); CHKERRQ(ierr);
+    ierr = VecDuplicate(phi, &phi2); CHKERRQ(ierr);
+
+    ierr = VecCopy(phi, phi2); CHKERRQ(ierr);
+    ierr = VecScale(phi2, (PetscScalar) myrank+1.0); CHKERRQ(ierr);
+    ierr = VecGetArray(phi2, &phi_array); CHKERRQ(ierr);
+    ierr = VecGetArray(psi,  &psi_array); CHKERRQ(ierr);            
+    MPI_Allreduce(phi_array, psi_array, N, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
+    ierr = VecRestoreArray(phi2, &phi_array); CHKERRQ(ierr);
+    ierr = VecRestoreArray(psi,  &psi_array); CHKERRQ(ierr);
+    if (!myrank){
+        ierr = VecView_EnsightASCII(psi, filename); CHKERRQ(ierr);
     }
     ierr = VecDestroy(psi); CHKERRQ(ierr);
     ierr = VecDestroy(phi2); CHKERRQ(ierr);
@@ -575,8 +610,8 @@ PetscErrorCode ShowComposite_Phi(Vec phi, const char filename[]){
 }
 
 #undef __FUNCT__
-#define __FUNCT__ "SaveComposite_U"
-PetscErrorCode SaveComposite_U(Vec u, const char filename[]){
+#define __FUNCT__ "SaveComposite_U_TXT"
+PetscErrorCode SaveComposite_U_TXT(Vec u, const char filename[]){
     PetscErrorCode ierr;
     Vec            psi;
     PetscScalar    *u_array, *psi_array;
@@ -595,6 +630,33 @@ PetscErrorCode SaveComposite_U(Vec u, const char filename[]){
     ierr = VecRestoreArray(psi,  &psi_array); CHKERRQ(ierr);
     if (!myrank){
         ierr = VecView_TXT(psi, filename); CHKERRQ(ierr);
+    }
+    ierr = VecDestroy(psi); CHKERRQ(ierr);
+    PetscFunctionReturn(0);
+}
+
+
+#undef __FUNCT__
+#define __FUNCT__ "SaveComposite_U_Ensight"
+PetscErrorCode SaveComposite_U_Ensight(Vec u, const char filename[]){
+    PetscErrorCode ierr;
+    Vec            psi;
+    PetscScalar    *u_array, *psi_array;
+    int            N;
+    PetscMPIInt    myrank;
+    
+    PetscFunctionBegin;
+    MPI_Comm_rank(PETSC_COMM_WORLD, &myrank);
+    ierr = VecGetSize(u, &N); CHKERRQ(ierr);
+    ierr = VecDuplicate(u, &psi); CHKERRQ(ierr);
+
+    ierr = VecGetArray(u, &u_array); CHKERRQ(ierr);
+    ierr = VecGetArray(psi,  &psi_array); CHKERRQ(ierr);            
+    MPI_Allreduce(u_array, psi_array, N, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
+    ierr = VecRestoreArray(u, &u_array); CHKERRQ(ierr);
+    ierr = VecRestoreArray(psi,  &psi_array); CHKERRQ(ierr);
+    if (!myrank){
+        ierr = VecView_EnsightASCII(psi, filename); CHKERRQ(ierr);
     }
     ierr = VecDestroy(psi); CHKERRQ(ierr);
     PetscFunctionReturn(0);
@@ -813,6 +875,8 @@ PetscErrorCode InitEnsight(AppCtx user, const char u_prfx[], const char phi_prfx
         for (i=0; i<numprocs; i++){
             ierr = PetscViewerASCIIPrintf(viewer, "scalar per node: PHI%i %s%.3d-level%i%s\n", i, phi_prfx, i, level, res_sfx); CHKERRQ(ierr);
         }
+        ierr = PetscViewerASCIIPrintf(viewer, "scalar per node: PHI_All Partition_Phi_all-level%i%s\n", level, res_sfx); CHKERRQ(ierr);
+        ierr = PetscViewerASCIIPrintf(viewer, "scalar per node: PHI_All Partition_U_all-level%i%s\n", level, res_sfx); CHKERRQ(ierr);
         ierr = PetscViewerFlush(viewer); CHKERRQ(ierr);
         ierr = PetscViewerDestroy(viewer); CHKERRQ(ierr);
     }
