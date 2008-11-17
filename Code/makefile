@@ -4,6 +4,9 @@ include ${SLEPC_DIR}/bmake/slepc_common
 PartitionMultiLevel: PartitionMultiLevel.o  chkopts
 	-${CLINKER} -o PartitionMultiLevel PartitionMultiLevel.o ${SLEPC_LIB}
 
+PartitionExactProj: PartitionExactProj.o  chkopts
+	-${CLINKER} -o PartitionExactProj PartitionExactProj.o ${SLEPC_LIB}
+
 MakeComposite: MakeComposite.o chkopts
 	-${CLINKER} -o MakeComposite MakeComposite.o ${PETSC_LIB}
     
