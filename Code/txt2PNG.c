@@ -44,7 +44,6 @@ int main (int argc, char ** argv) {
     
     sprintf(filename, "%s.txt", prefix);
     ierr = VecReadTXT(x, filename);CHKERRQ(ierr);
-    ierr = VecView(x, PETSC_VIEWER_DRAW_WORLD);CHKERRQ(ierr);
     
     sprintf(filename, "%s.png", prefix);
     ierr = VecViewPNGJet(x, filename);CHKERRQ(ierr);
