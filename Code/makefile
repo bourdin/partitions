@@ -4,8 +4,8 @@ include ${SLEPC_DIR}/bmake/slepc_common
 PartitionMultiLevel: PartitionMultiLevel.o  chkopts
 	-${CLINKER} -o PartitionMultiLevel PartitionMultiLevel.o ${SLEPC_LIB}
 
-MakeCompositeF90: MakeCompositeF90.o chkopts
-	-${FLINKER} -o MakeCompositeF90 MakeCompositeF90.o ${PETSC_LIB} ${PETSC_FLIB}
+MakeComposite: MakeComposite.o chkopts
+	-${CLINKER} -o MakeComposite MakeComposite.o ${PETSC_LIB}
     
 PartitionSimplified: PartitionSimplified.o  chkopts
 	-${CLINKER} -o PartitionSimplified PartitionSimplified.o ${SLEPC_LIB}
@@ -27,3 +27,6 @@ Partition2DPer: Partition2DPer.o  chkopts
 
 Partition2DMR: Partition2DMR.o  chkopts
 	-${CLINKER} -o Partition2DMR Partition2DMR.o ${SLEPC_LIB}
+
+txt2PNG: txt2PNG.o  chkopts
+	-${CLINKER} -o txt2PNG txt2PNG.o ${PETSC_LIB} -lpng
