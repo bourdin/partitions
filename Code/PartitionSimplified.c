@@ -180,9 +180,12 @@ int main (int argc, char ** argv) {
     
     if (user.per) {
         ierr = PetscPrintf(PETSC_COMM_WORLD, "Using periodic boundary conditions\n"); CHKERRQ(ierr);
-        ierr = DACreate(PETSC_COMM_SELF, user.ndim, DA_XYZPERIODIC, DA_STENCIL_STAR, user.nx, user.ny, user.nz, PETSC_DECIDE, PETSC_DECIDE, PETSC_DECIDE, 1, 1, PETSC_NULL, PETSC_NULL, PETSC_NULL, &user.da); CHKERRQ(ierr);
-    }
-    else {
+        if (user.ndim == 2) {
+            ierr = DACreate2d(PETSC_COMM_SELF, DA_XYPERIODIC, DA_STENCIL_STAR, user.nx, user.ny, PETSC_DECIDE, PETSC_DECIDE, 1, 1, PETSC_NULL, PETSC_NULL, &user.da); CHKERRQ(ierr);
+        } else {
+            ierr = DACreate3d(PETSC_COMM_SELF, DA_XYZPERIODIC, DA_STENCIL_STAR, user.nx, user.ny, user.nz, PETSC_DECIDE, PETSC_DECIDE, PETSC_DECIDE, 1, 1, PETSC_NULL, PETSC_NULL, PETSC_NULL, &user.da); CHKERRQ(ierr);
+        }
+    } else {
         ierr = PetscPrintf(PETSC_COMM_WORLD, "Using non-periodic boundary conditions\n"); CHKERRQ(ierr);
         ierr = DACreate(PETSC_COMM_SELF, user.ndim, DA_NONPERIODIC, DA_STENCIL_STAR, user.nx, user.ny, user.nz, PETSC_DECIDE, PETSC_DECIDE, PETSC_DECIDE, 1, 1, PETSC_NULL, PETSC_NULL, PETSC_NULL, &user.da); CHKERRQ(ierr);
     }
