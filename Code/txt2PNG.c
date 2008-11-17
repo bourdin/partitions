@@ -271,7 +271,7 @@ int JetG(PetscScalar x){
     
     PetscFunctionBegin;    
     
-    if ( (x>32) && (x<224) ){
+    if ( (x>31) && (x<223) ){
         G = PetscMin( 255, PetscMin(4*(x-31), 4*(223-x)));
     } else {
         G = 0;
