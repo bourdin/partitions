@@ -80,7 +80,7 @@ int main (int argc, char ** argv) {
     int             modsave;
     PetscTruth      showphi = PETSC_FALSE;
             
-    int				N, i, it;
+    int				N, i, it, totalit;
     PetscInt        maxit;
     PetscTruth		flag;
     
@@ -180,7 +180,6 @@ int main (int argc, char ** argv) {
 
     TwoPass = PETSC_FALSE;
     ierr = PetscOptionsGetTruth(PETSC_NULL, "-twopass", &TwoPass, PETSC_NULL); CHKERRQ(ierr);
-    if (TwoPass == PETSC_TRUE) FinalPass = PETSC_FALSE;
     
     user.numlevels = 1;
     ierr = PetscOptionsGetInt(PETSC_NULL, "-levels", & user.numlevels, PETSC_NULL); CHKERRQ(ierr);
@@ -244,15 +243,11 @@ int main (int argc, char ** argv) {
     
     MPI_Allreduce(&lambda, &F, 1, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
     
-    sprintf(filename, "Partition-level%d.log", level);
-    ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD, filename, &viewer); CHKERRQ(ierr);
-    ierr = PetscViewerASCIIPrintf(viewer, "%d   %e   ", it, F); CHKERRQ(ierr);
-    ierr = PetscViewerASCIISynchronizedPrintf(viewer, "%e   ", lambda); CHKERRQ(ierr);
-    ierr = PetscViewerFlush(viewer); CHKERRQ(ierr);
-    ierr = PetscViewerASCIIPrintf(viewer, "%e \n", tol, it); CHKERRQ(ierr);
     
     ierr = PetscLogBegin(); CHKERRQ(ierr);
     for (level=0; level<user.numlevels; level++){
+        sprintf(filename, "Partition-level%d.log", level);
+        ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD, filename, &viewer); CHKERRQ(ierr);
         if (SaveEnsight==PETSC_TRUE) {
             ierr = PetscLogStagePush(stages[1]); CHKERRQ(ierr);
             ierr = InitEnsight(user, u_prfx, phi_prfx, res_sfx, level); CHKERRQ(ierr);
@@ -260,49 +255,10 @@ int main (int argc, char ** argv) {
         }    
         error = tol + 1.0;    
         it = 0;
-        do { 
-            if ( (error < tol) && (it > 20) && (TwoPass == PETSC_TRUE) && (level == user.numlevels-1) ){
-                ierr = PetscPrintf(PETSC_COMM_WORLD, "Switching to EXACT projection\n");; CHKERRQ(ierr);
-                FirstPass = PETSC_FALSE;
-                FinalPass = PETSC_TRUE;
-    
-                ierr = PetscLogStagePush(stages[1]); CHKERRQ(ierr);
-                if (SaveTXT == PETSC_TRUE){
-                    sprintf(filename, "%s%.3d-level%d-step1%s", u_prfx, myrank, level, txt_sfx);
-                    ierr = VecView_TXT(u, filename); CHKERRQ(ierr);
-                    sprintf(filename, "%s%.3d-level%d-step1%s", phi_prfx, myrank, level, txt_sfx);
-                    ierr = VecView_TXT(phi, filename); CHKERRQ(ierr);
-                    sprintf(filename, "Partition_Phi_all-level%d-step1.txt", level);
-                    ierr = SaveComposite_Phi_TXT(phi, filename); CHKERRQ(ierr);
-                    sprintf(filename, "Partition_U_all-level%d-step1.txt", level);
-                    ierr = SaveComposite_U_TXT(u, filename); CHKERRQ(ierr);
-                }
-                if (SaveVTK == PETSC_TRUE){
-                    sprintf(filename, "%s%.3d-level%d-step1%s", u_prfx, myrank, level, vtk_sfx);
-                    ierr = VecView_VTKASCII(u, filename); CHKERRQ(ierr);
-                    sprintf(filename, "%s%.3d-level%d-step1%s", phi_prfx, myrank, level, vtk_sfx);
-                    ierr = VecView_VTKASCII(phi, filename); CHKERRQ(ierr);
-                }
-                if (SaveEnsight == PETSC_TRUE){
-                    sprintf(filename, "%s%.3d-level%d-step1%s", u_prfx, myrank, level, res_sfx);
-                    ierr = VecView_EnsightASCII(u, filename); CHKERRQ(ierr);
-                    sprintf(filename, "%s%.3d-level%d-step1%s", phi_prfx, myrank, level, res_sfx);
-                    ierr = VecView_EnsightASCII(phi, filename); CHKERRQ(ierr);
-                    sprintf(filename, "Partition_Phi_all-level%d-step1%s", level, res_sfx);
-                    ierr = SaveComposite_Phi_Ensight(phi, filename); CHKERRQ(ierr);
-                    sprintf(filename, "Partition_U_all-level%d-step1%s", level, res_sfx);
-                    ierr = SaveComposite_U_Ensight(u, filename); CHKERRQ(ierr);
-                }
-                ierr = PetscLogStagePop(); CHKERRQ(ierr);
-            } 
-
-
-            it++;
-            
+        for (it=0; it<maxit; it++){
             Fold = F;
             F = 0.0;
             ierr = PetscPrintf(PETSC_COMM_WORLD, "Level %d (%dx%dx%d) iteration %d:\n", level, user.nx, user.ny, user.nz, it); CHKERRQ(ierr);
-            
             // Save the previous iteration
             ierr = VecCopy(phi, phi_err); CHKERRQ(ierr);
             
@@ -313,13 +269,9 @@ int main (int argc, char ** argv) {
             ierr = VecAXPY(phi, step, G); CHKERRQ(ierr);
             
             // Project phi onto the simplex \sum_k \phi^k_i=1 for i = 0 : nx*ny*nz-1
-            if (FirstPass == PETSC_TRUE){
-                ierr = SimplexProjection2(user, phi); CHKERRQ(ierr);
-                ierr = PetscPrintf(PETSC_COMM_WORLD, "*** Using FAST projection\n"); CHKERRQ(ierr);
-            } else {
-                ierr = SimplexProjection(user, phi); CHKERRQ(ierr);
-                ierr = PetscPrintf(PETSC_COMM_WORLD, "*** Using EXACT projection\n"); CHKERRQ(ierr);
-            } 
+            ierr = SimplexProjection2(user, phi); CHKERRQ(ierr);
+            ierr = PetscPrintf(PETSC_COMM_WORLD, "*** Using FAST projection\n"); CHKERRQ(ierr);
+        
             // Compute the distance the simplex:
             ierr = DistanceFromSimplex(&dist, phi); CHKERRQ(ierr);
             ierr = PetscPrintf(PETSC_COMM_WORLD, "   Distance from simplex: %f\n", dist); CHKERRQ(ierr);
@@ -354,8 +306,12 @@ int main (int argc, char ** argv) {
             ierr = PetscViewerASCIISynchronizedPrintf(viewer, "%e   ", lambda); CHKERRQ(ierr);
             ierr = PetscViewerFlush(viewer); CHKERRQ(ierr);
             ierr = PetscViewerASCIIPrintf(viewer, "%e \n", error, it); CHKERRQ(ierr);
-          
-          
+
+            // jump to next level if we have converged
+            totalit = it;
+            if ( (it>20) && (error < tol) ) break;
+
+            // perhaps save the files otherwise
             if (it%modsave == 0){
                 if (showphi == PETSC_TRUE) {
                     ierr = ShowComposite_Phi(phi, filename); CHKERRQ(ierr);
@@ -366,9 +322,9 @@ int main (int argc, char ** argv) {
                     ierr = VecView_TXT(u, filename); CHKERRQ(ierr);
                     sprintf(filename, "%s%.3d-level%d%s", phi_prfx, myrank, level, txt_sfx);
                     ierr = VecView_TXT(phi, filename); CHKERRQ(ierr);
-                    sprintf(filename, "Partition_Phi_all-level%d-step1.txt", level);
+                    sprintf(filename, "Partition_Phi_all-level%d.txt", level);
                     ierr = SaveComposite_Phi_TXT(phi, filename); CHKERRQ(ierr);
-                    sprintf(filename, "Partition_U_all-level%d-step1.txt", level);
+                    sprintf(filename, "Partition_U_all-level%d.txt", level);
                     ierr = SaveComposite_U_TXT(u, filename); CHKERRQ(ierr);
                 }
                 if (SaveVTK == PETSC_TRUE){
@@ -382,26 +338,26 @@ int main (int argc, char ** argv) {
                     ierr = VecView_EnsightASCII(u, filename); CHKERRQ(ierr);
                     sprintf(filename, "%s%.3d-level%d%s", phi_prfx, myrank, level, res_sfx);
                     ierr = VecView_EnsightASCII(phi, filename); CHKERRQ(ierr);
-                    sprintf(filename, "Partition_Phi_all-level%d-step1%s", level, res_sfx);
+                    sprintf(filename, "Partition_Phi_all-level%d%s", level, res_sfx);
                     ierr = SaveComposite_Phi_Ensight(phi, filename); CHKERRQ(ierr);
-                    sprintf(filename, "Partition_U_all-level%d-step1%s", level, res_sfx);
+                    sprintf(filename, "Partition_U_all-level%d%s", level, res_sfx);
                     ierr = SaveComposite_U_Ensight(u, filename); CHKERRQ(ierr);
                 }
                 ierr = PetscLogStagePop(); CHKERRQ(ierr);
             }
-    
-        // This must be the most convoluted stopping crterion. there HAS to be something better!
-        } while ( (it < 20 ) || ( ( it < maxit ) && ((error > tol) || (FinalPass == PETSC_FALSE)) ) );
-    
+            
+         }
+
+        // current level iteration is done, now  save the final result
         ierr = PetscLogStagePush(stages[1]); CHKERRQ(ierr);
         if (SaveTXT == PETSC_TRUE){
             sprintf(filename, "%s%.3d-level%d%s", u_prfx, myrank, level, txt_sfx);
             ierr = VecView_TXT(u, filename); CHKERRQ(ierr);
             sprintf(filename, "%s%.3d-level%d%s", phi_prfx, myrank, level, txt_sfx);
             ierr = VecView_TXT(phi, filename); CHKERRQ(ierr);
-            sprintf(filename, "Partition_Phi_all-level%d-step1.txt", level);
+            sprintf(filename, "Partition_Phi_all-level%d.txt", level);
             ierr = SaveComposite_Phi_TXT(phi, filename); CHKERRQ(ierr);
-            sprintf(filename, "Partition_U_all-level%d-step1.txt", level);
+            sprintf(filename, "Partition_U_all-level%d.txt", level);
             ierr = SaveComposite_U_TXT(u, filename); CHKERRQ(ierr);
         }
         if (SaveVTK == PETSC_TRUE){
@@ -415,13 +371,14 @@ int main (int argc, char ** argv) {
             ierr = VecView_EnsightASCII(u, filename); CHKERRQ(ierr);
             sprintf(filename, "%s%.3d-level%d%s", phi_prfx, myrank, level, res_sfx);
             ierr = VecView_EnsightASCII(phi, filename); CHKERRQ(ierr);
-            sprintf(filename, "Partition_Phi_all-level%d-step1%s", level, res_sfx);
+            sprintf(filename, "Partition_Phi_all-level%d%s", level, res_sfx);
             ierr = SaveComposite_Phi_Ensight(phi, filename); CHKERRQ(ierr);
-            sprintf(filename, "Partition_U_all-level%d-step1%s", level, res_sfx);
+            sprintf(filename, "Partition_U_all-level%d%s", level, res_sfx);
             ierr = SaveComposite_U_Ensight(u, filename); CHKERRQ(ierr);
         }
         ierr = PetscLogStagePop(); CHKERRQ(ierr);
-        
+
+        // Prepare the next level if needed
         /* 
         Refine the grid and interpolate
         */
@@ -499,7 +456,103 @@ int main (int argc, char ** argv) {
         }
 
     }   
-    // Be nice and deallocate
+    if (TwoPass == PETSC_TRUE){
+        error = tol + 1.0;    
+        ierr = PetscViewerASCIIPrintf(viewer, "\n\n"); CHKERRQ(ierr);
+        ierr = PetscViewerFlush(viewer); CHKERRQ(ierr);
+        for (it=0; it<maxit; it++){
+            Fold = F;
+            F = 0.0;
+            ierr = PetscPrintf(PETSC_COMM_WORLD, "Level %d (%dx%dx%d) iteration %d:\n", level, user.nx, user.ny, user.nz, it+totalit); CHKERRQ(ierr);
+            // Save the previous iteration
+            ierr = VecCopy(phi, phi_err); CHKERRQ(ierr);
+            
+            // Compute the gradient of the objective function w.r.t. u
+            ierr = ComputeG(user, G, u); CHKERRQ(ierr);
+            
+            // Update phi
+            ierr = VecAXPY(phi, step, G); CHKERRQ(ierr);
+            
+            // Project phi onto the simplex \sum_k \phi^k_i=1 for i = 0 : nx*ny*nz-1
+            ierr = SimplexProjection(user, phi); CHKERRQ(ierr);
+            ierr = PetscPrintf(PETSC_COMM_WORLD, "*** Using EXACT projection\n"); CHKERRQ(ierr);
+        
+            // Compute the distance the simplex:
+            ierr = DistanceFromSimplex(&dist, phi); CHKERRQ(ierr);
+            ierr = PetscPrintf(PETSC_COMM_WORLD, "   Distance from simplex: %f\n", dist); CHKERRQ(ierr);
+            
+            // Compute the L^\infty error on Phi
+            ierr = VecAXPY(phi_err, -1.0, phi); CHKERRQ(ierr);
+            ierr = VecNorm(phi_err, NORM_INFINITY, &myerror); CHKERRQ(ierr);
+            ierr = PetscGlobalMax(&myerror, &error, PETSC_COMM_WORLD); CHKERRQ(ierr);
+    
+            //Compute the eigenvalues u associated to the new phi
+            ierr = PetscLogStagePush(stages[0]); CHKERRQ(ierr);
+            ierr = ComputeLambdaU(user, phi, &lambda, u); CHKERRQ(ierr);
+            ierr = PetscLogStagePop(); CHKERRQ(ierr);
+    
+            //compute F= \sum_k lambda^k_epsnum
+            MPI_Allreduce(&lambda, &F, 1, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
+            
+            // Update the step
+            if (F<=Fold) {
+                step = step * 1.2;
+                step = PetscMin(step, user.stepmax);
+            } else {
+                step = step / 2.0;
+                step = PetscMax(step, user.stepmin);
+            }
+    
+            //Display some stuff
+            ierr = PetscPrintf(PETSC_COMM_WORLD, "F = %e, step = %e, error = %e, mu = %e\n\n", F, step, error, user.mu); CHKERRQ(ierr);
+    
+            //Save the same stuff in "Partition.log"
+            ierr = PetscViewerASCIIPrintf(viewer, "%d   %e   ", it+totalit, F); CHKERRQ(ierr);
+            ierr = PetscViewerASCIISynchronizedPrintf(viewer, "%e   ", lambda); CHKERRQ(ierr);
+            ierr = PetscViewerFlush(viewer); CHKERRQ(ierr);
+            ierr = PetscViewerASCIIPrintf(viewer, "%e \n", error, it); CHKERRQ(ierr);
+
+            // jump to next level if we have converged
+            if ( (it>20) && (error < tol) ) break;
+
+            // perhaps save the files otherwise
+            if (it%modsave == 0){
+                if (showphi == PETSC_TRUE) {
+                    ierr = ShowComposite_Phi(phi, filename); CHKERRQ(ierr);
+                }                
+                ierr = PetscLogStagePush(stages[1]); CHKERRQ(ierr);
+                if (SaveTXT == PETSC_TRUE){
+                    sprintf(filename, "%s%.3d-level%d-step2%s", u_prfx, myrank, level, txt_sfx);
+                    ierr = VecView_TXT(u, filename); CHKERRQ(ierr);
+                    sprintf(filename, "%s%.3d-level%d-step2%s", phi_prfx, myrank, level, txt_sfx);
+                    ierr = VecView_TXT(phi, filename); CHKERRQ(ierr);
+                    sprintf(filename, "Partition_Phi_all-level%d-step2.txt", level);
+                    ierr = SaveComposite_Phi_TXT(phi, filename); CHKERRQ(ierr);
+                    sprintf(filename, "Partition_U_all-level%d-step2.txt", level);
+                    ierr = SaveComposite_U_TXT(u, filename); CHKERRQ(ierr);
+                }
+                if (SaveVTK == PETSC_TRUE){
+                    sprintf(filename, "%s%.3d-level%d-step2%s", u_prfx, myrank, level, vtk_sfx);
+                    ierr = VecView_VTKASCII(u, filename); CHKERRQ(ierr);
+                    sprintf(filename, "%s%.3d-level%d-step2%s", phi_prfx, myrank, level, vtk_sfx);
+                    ierr = VecView_VTKASCII(phi, filename); CHKERRQ(ierr);
+                }
+                if (SaveEnsight == PETSC_TRUE){
+                    sprintf(filename, "%s%.3d-level%d-step2%s", u_prfx, myrank, level, res_sfx);
+                    ierr = VecView_EnsightASCII(u, filename); CHKERRQ(ierr);
+                    sprintf(filename, "%s%.3d-level%d-step2%s", phi_prfx, myrank, level, res_sfx);
+                    ierr = VecView_EnsightASCII(phi, filename); CHKERRQ(ierr);
+                    sprintf(filename, "Partition_Phi_all-level%d-step2%s", level, res_sfx);
+                    ierr = SaveComposite_Phi_Ensight(phi, filename); CHKERRQ(ierr);
+                    sprintf(filename, "Partition_U_all-level%d-step2%s", level, res_sfx);
+                    ierr = SaveComposite_U_Ensight(u, filename); CHKERRQ(ierr);
+                }
+                ierr = PetscLogStagePop(); CHKERRQ(ierr);
+            }
+         }
+    }
+
+
     VecDestroy(phi);
     VecDestroy(phi_err);
     VecDestroy(u);
@@ -822,7 +875,8 @@ extern PetscErrorCode InitPhiRandom(AppCtx user, Vec phi){
     ierr = PetscRandomCreate(comm, &rndm); CHKERRQ(ierr);
     ierr = PetscRandomSetFromOptions(rndm); CHKERRQ(ierr);
     ierr = PetscGetTime(&tim); CHKERRQ(ierr);
-    seed = (unsigned long) (rank +1) * (unsigned long) tim;
+//    seed = (unsigned long) (rank +1) * (unsigned long) tim;
+    seed = 1227037290 + (unsigned long) (rank +1);
     ierr = PetscSynchronizedPrintf(PETSC_COMM_WORLD, "[%i] Seed is %d\n", rank, seed); CHKERRQ(ierr);
     ierr = PetscSynchronizedFlush(PETSC_COMM_WORLD); CHKERRQ(ierr);
     ierr = PetscRandomSetSeed(rndm, seed); CHKERRQ(ierr);

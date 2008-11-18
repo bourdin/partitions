@@ -653,7 +653,8 @@ extern PetscErrorCode InitPhiRandom(AppCtx user, Vec phi){
     ierr = PetscRandomCreate(comm, &rndm); CHKERRQ(ierr);
     ierr = PetscRandomSetFromOptions(rndm); CHKERRQ(ierr);
     ierr = PetscGetTime(&tim); CHKERRQ(ierr);
-    seed = (unsigned long) (rank +1) * (unsigned long) tim;
+//    seed = (unsigned long) (rank +1) * (unsigned long) tim;
+    seed = 1227037290 + (unsigned long) (rank +1);
     ierr = PetscSynchronizedPrintf(PETSC_COMM_WORLD, "[%i] Seed is %d\n", rank, seed); CHKERRQ(ierr);
     ierr = PetscSynchronizedFlush(PETSC_COMM_WORLD); CHKERRQ(ierr);
     ierr = PetscRandomSetSeed(rndm, seed); CHKERRQ(ierr);
