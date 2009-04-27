@@ -2,7 +2,7 @@ ALL: PartitionSimplified
 include ${SLEPC_DIR}/conf/slepc_common
 
 PartitionMultiLevel: PartitionMultiLevel.o  chkopts
-	-${CLINKER} -o PartitionMultiLevel PartitionMultiLevel.o ${SLEPC_LIB}
+	-${CLINKER} -o PartitionMultiLevel PartitionMultiLevel.o ${SLEPC_LIB} -lpng
 
 PartitionExactProj: PartitionExactProj.o  chkopts
 	-${CLINKER} -o PartitionExactProj PartitionExactProj.o ${SLEPC_LIB}
