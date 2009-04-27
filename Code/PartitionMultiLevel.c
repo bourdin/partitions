@@ -34,7 +34,9 @@ typedef struct {
 extern PetscErrorCode DistanceFromSimplex(PetscScalar *dist, Vec phi); 
 extern PetscErrorCode ShowComposite_Phi(Vec phi, const char filename[]);
 extern PetscErrorCode SaveComposite_Phi_TXT(Vec phi, const char filename[]);
+extern PetscErrorCode SaveComposite_Phi_PNG(Vec phi, const char filename[]);
 extern PetscErrorCode SaveComposite_U_TXT(Vec u, const char filename[]);
+extern PetscErrorCode SaveComposite_U_PNG(Vec u, const char filename[]);
 extern PetscErrorCode SaveComposite_Phi_Ensight(Vec phi, const char filename[]);
 extern PetscErrorCode SaveComposite_U_Ensight(Vec u, const char filename[]);
 extern PetscErrorCode ComputeK2d(AppCtx user, Vec phi);
@@ -358,6 +360,10 @@ int main (int argc, char ** argv) {
                     ierr = VecViewPNGJet(u, filename); CHKERRQ(ierr);
                     sprintf(filename, "%s%.3d-level%d%s", phi_prfx, myrank, level, png_sfx);
                     ierr = VecViewPNGJet(phi, filename); CHKERRQ(ierr);
+                    sprintf(filename, "Partition_Phi_all-level%d.png", level);
+                    ierr = SaveComposite_Phi_PNG(phi, filename); CHKERRQ(ierr);
+                    sprintf(filename, "Partition_U_all-level%d.png", level);
+                    ierr = SaveComposite_U_PNG(u, filename); CHKERRQ(ierr);
                 }
             }
             
@@ -617,6 +623,36 @@ PetscErrorCode SaveComposite_Phi_TXT(Vec phi, const char filename[]){
 }
 
 #undef __FUNCT__
+#define __FUNCT__ "SaveComposite_Phi_PNG"
+PetscErrorCode SaveComposite_Phi_PNG(Vec phi, const char filename[]){
+    PetscErrorCode ierr;
+    Vec            psi, phi2;
+    PetscMPIInt    myrank;
+    PetscScalar    *phi_array, *psi_array;
+    int            N;
+    
+    PetscFunctionBegin;
+    MPI_Comm_rank(PETSC_COMM_WORLD, &myrank);
+    ierr = VecGetSize(phi, &N); CHKERRQ(ierr);
+    ierr = VecDuplicate(phi, &psi); CHKERRQ(ierr);
+    ierr = VecDuplicate(phi, &phi2); CHKERRQ(ierr);
+
+    ierr = VecCopy(phi, phi2); CHKERRQ(ierr);
+    ierr = VecScale(phi2, (PetscScalar) myrank+1.0); CHKERRQ(ierr);
+    ierr = VecGetArray(phi2, &phi_array); CHKERRQ(ierr);
+    ierr = VecGetArray(psi,  &psi_array); CHKERRQ(ierr);            
+    MPI_Allreduce(phi_array, psi_array, N, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
+    ierr = VecRestoreArray(phi2, &phi_array); CHKERRQ(ierr);
+    ierr = VecRestoreArray(psi,  &psi_array); CHKERRQ(ierr);
+    if (!myrank){
+        ierr = VecViewPNGJet(psi, filename); CHKERRQ(ierr);
+    }
+    ierr = VecDestroy(psi); CHKERRQ(ierr);
+    ierr = VecDestroy(phi2); CHKERRQ(ierr);
+    PetscFunctionReturn(0);
+}
+
+#undef __FUNCT__
 #define __FUNCT__ "SaveComposite_Phi_Ensight"
 PetscErrorCode SaveComposite_Phi_Ensight(Vec phi, const char filename[]){
     PetscErrorCode ierr;
@@ -698,6 +734,32 @@ PetscErrorCode SaveComposite_U_TXT(Vec u, const char filename[]){
     ierr = VecRestoreArray(psi,  &psi_array); CHKERRQ(ierr);
     if (!myrank){
         ierr = VecView_TXT(psi, filename); CHKERRQ(ierr);
+    }
+    ierr = VecDestroy(psi); CHKERRQ(ierr);
+    PetscFunctionReturn(0);
+}
+
+#undef __FUNCT__
+#define __FUNCT__ "SaveComposite_U_PNG"
+PetscErrorCode SaveComposite_U_PNG(Vec u, const char filename[]){
+    PetscErrorCode ierr;
+    Vec            psi;
+    PetscScalar    *u_array, *psi_array;
+    int            N;
+    PetscMPIInt    myrank;
+    
+    PetscFunctionBegin;
+    MPI_Comm_rank(PETSC_COMM_WORLD, &myrank);
+    ierr = VecGetSize(u, &N); CHKERRQ(ierr);
+    ierr = VecDuplicate(u, &psi); CHKERRQ(ierr);
+
+    ierr = VecGetArray(u, &u_array); CHKERRQ(ierr);
+    ierr = VecGetArray(psi,  &psi_array); CHKERRQ(ierr);            
+    MPI_Allreduce(u_array, psi_array, N, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
+    ierr = VecRestoreArray(u, &u_array); CHKERRQ(ierr);
+    ierr = VecRestoreArray(psi,  &psi_array); CHKERRQ(ierr);
+    if (!myrank){
+        ierr = VecViewPNGJet(psi, filename); CHKERRQ(ierr);
     }
     ierr = VecDestroy(psi); CHKERRQ(ierr);
     PetscFunctionReturn(0);
