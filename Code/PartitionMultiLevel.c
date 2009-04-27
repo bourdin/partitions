@@ -111,8 +111,8 @@ int main (int argc, char ** argv) {
     PetscFunctionBegin;
     ierr = SlepcInitialize(&argc, &argv, (char*)0, help); CHKERRQ(ierr);
     
-    ierr = PetscLogStageRegister(&stages[0], "Eigensolver"); CHKERRQ(ierr)
-    ierr = PetscLogStageRegister(&stages[1], "I/O"); CHKERRQ(ierr)
+    ierr = PetscLogStageRegister("Eigensolver", &stages[0]); CHKERRQ(ierr);
+    ierr = PetscLogStageRegister("I/O", &stages[1]); CHKERRQ(ierr);
     
     MPI_Comm_size(PETSC_COMM_WORLD, &numprocs);
     MPI_Comm_rank(PETSC_COMM_WORLD, &myrank);
@@ -213,7 +213,7 @@ int main (int argc, char ** argv) {
     ierr = EPSSetOperators(user.eps, user.K, PETSC_NULL); CHKERRQ(ierr);
     ierr = EPSSetProblemType(user.eps, EPS_HEP); CHKERRQ(ierr);
     ierr = EPSGetST(user.eps, &st); CHKERRQ(ierr);
-    ierr = EPSSetDimensions(user.eps, user.epsnum, 5*user.epsnum); CHKERRQ(ierr);
+    ierr = EPSSetDimensions(user.eps, user.epsnum, 5*user.epsnum, PETSC_DECIDE); CHKERRQ(ierr);
     
     ierr = STSetType(st, st_type); CHKERRQ(ierr);
     ierr = STSetShift(st, st_shift); CHKERRQ(ierr);
@@ -440,7 +440,7 @@ int main (int argc, char ** argv) {
             ierr = EPSSetOperators(user.eps, user.K, PETSC_NULL); CHKERRQ(ierr);
             ierr = EPSSetProblemType(user.eps, EPS_HEP); CHKERRQ(ierr);
             ierr = EPSGetST(user.eps, &st); CHKERRQ(ierr);
-            ierr = EPSSetDimensions(user.eps, user.epsnum, 5*user.epsnum); CHKERRQ(ierr);
+            ierr = EPSSetDimensions(user.eps, user.epsnum, 5*user.epsnum, PETSC_DECIDE); CHKERRQ(ierr);
             
             ierr = STSetType(st, st_type); CHKERRQ(ierr);
             ierr = STSetShift(st, st_shift); CHKERRQ(ierr);
