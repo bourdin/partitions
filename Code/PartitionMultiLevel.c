@@ -731,6 +731,7 @@ PetscErrorCode SaveComposite_U_TXT(Vec u, const char filename[]){
     ierr = VecGetArray(psi,  &psi_array); CHKERRQ(ierr);            
     MPI_Allreduce(u_array, psi_array, N, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
     ierr = VecRestoreArray(u, &u_array); CHKERRQ(ierr);
+    ierr = VecAbs(psi); CHKERRQ(ierr);
     ierr = VecRestoreArray(psi,  &psi_array); CHKERRQ(ierr);
     if (!myrank){
         ierr = VecView_TXT(psi, filename); CHKERRQ(ierr);
@@ -757,6 +758,7 @@ PetscErrorCode SaveComposite_U_PNG(Vec u, const char filename[]){
     ierr = VecGetArray(psi,  &psi_array); CHKERRQ(ierr);            
     MPI_Allreduce(u_array, psi_array, N, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
     ierr = VecRestoreArray(u, &u_array); CHKERRQ(ierr);
+    ierr = VecAbs(psi); CHKERRQ(ierr);
     ierr = VecRestoreArray(psi,  &psi_array); CHKERRQ(ierr);
     if (!myrank){
         ierr = VecViewPNGJet(psi, filename); CHKERRQ(ierr);
@@ -784,6 +786,7 @@ PetscErrorCode SaveComposite_U_Ensight(Vec u, const char filename[]){
     ierr = VecGetArray(psi,  &psi_array); CHKERRQ(ierr);            
     MPI_Allreduce(u_array, psi_array, N, MPIU_SCALAR, MPI_SUM, PETSC_COMM_WORLD);
     ierr = VecRestoreArray(u, &u_array); CHKERRQ(ierr);
+    ierr = VecAbs(psi); CHKERRQ(ierr);
     ierr = VecRestoreArray(psi,  &psi_array); CHKERRQ(ierr);
     if (!myrank){
         ierr = VecView_EnsightASCII(psi, filename); CHKERRQ(ierr);
