@@ -26,6 +26,7 @@ int main (int argc, char ** argv) {
     int             nx, ny;
     PetscTruth		flag;
     PetscErrorCode  ierr;
+    PetscScalar     scaling=1;
 
     PetscFunctionBegin;
     PetscInitialize(&argc,&argv,(char *)0,help);
@@ -36,6 +37,8 @@ int main (int argc, char ** argv) {
     if (flag == PETSC_FALSE) SETERRQ(PETSC_ERR_ARG_WRONG,"Missing -ny flag");
     ierr = PetscOptionsGetString(PETSC_NULL, "-f", prefix, PETSC_MAX_PATH_LEN-1, &flag);CHKERRQ(ierr);
     if (flag == PETSC_FALSE) SETERRQ(PETSC_ERR_ARG_WRONG,"Missing -f flag");
+    ierr = PetscOptionsGetReal(PETSC_NULL, "-s", &scaling, &flag);CHKERRQ(ierr);
+    
 
     ierr = DACreate2d(PETSC_COMM_WORLD, DA_NONPERIODIC, DA_STENCIL_STAR, nx, ny, PETSC_DECIDE, PETSC_DECIDE, 1, 1, PETSC_NULL, PETSC_NULL, &da); CHKERRQ(ierr);
     
@@ -44,6 +47,8 @@ int main (int argc, char ** argv) {
     
     sprintf(filename, "%s.txt", prefix);
     ierr = VecReadTXT(x, filename);CHKERRQ(ierr);
+    
+    ierr = VecScale(x, scaling); CHKERRQ(ierr);
     
     sprintf(filename, "%s.png", prefix);
     ierr = VecViewPNGJet(x, filename);CHKERRQ(ierr);
