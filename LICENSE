@@ -26,8 +26,8 @@ of the authors and should not be interpreted as representing official policies,
 either expressed or implied, of the FreeBSD Project.
 
 In addition to the above license, we cordially ask that any published work derived 
-from this code, or utilizing it references the following published work:
-
+from this code, or utilizing it references the software as DOI:10.5281/zenodo.3242189,
+and the following published work:
 
 @article{Bourdin-Bucur-EtAl-2009a,
 	Author = {Bourdin, B. and Bucur, D. and Oudet, \'E.},
